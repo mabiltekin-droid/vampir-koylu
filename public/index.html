@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vampir Köylü Online</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; }
+        #game-box { margin-top: 50px; border: 2px solid #444; padding: 20px; display: inline-block; }
+        .vampire { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🧛‍♂️ Vampir Köylü</h1>
+    <div id="setup">
+        <input type="text" id="username" placeholder="Adın ne?">
+        <button onclick="join()">Katıl</button>
+    </div>
+
+    <div id="game-box" style="display:none;">
+        <h2 id="role-display">Rolün Bekleniyor...</h2>
+        <p id="status">Lobi bekleniyor...</p>
+        <ul id="player-list"></ul>
+        <button id="start-btn" onclick="start()">Oyunu Başlat</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        
+        function join() {
+            const name = document.getElementById('username').value;
+            if(name) {
+                socket.emit('joinGame', name);
+                document.getElementById('setup').style.display = 'none';
+                document.getElementById('game-box').style.display = 'block';
+            }
+        }
+
+        function start() {
+            socket.emit('startGame');
+        }
+
+        socket.on('updatePlayerList', (players) => {
+            const list = document.getElementById('player-list');
+            list.innerHTML = players.map(p => `<li>${p.name} ${p.alive ? '✅' : '💀'}</li>`).join('');
+        });
+
+        socket.on('assignRole', (role) => {
+            const el = document.getElementById('role-display');
+            el.innerText = "Rolün: " + role;
+            if(role === 'Vampir') el.className = 'vampire';
+        });
+
+        socket.on('gameStarted', (data) => {
+            document.getElementById('status').innerText = "Oyun Başladı! Gece oldu...";
+            document.getElementById('start-btn').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
