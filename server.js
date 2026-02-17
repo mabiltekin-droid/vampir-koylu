@@ -22,18 +22,30 @@ io.on('connection', (socket) => {
         io.emit('updatePlayerList', players);
     });
 
+    // Voice Chat Sinyalleşme
+    socket.on('voice-signal', (data) => {
+        io.to(data.to).emit('voice-signal', {
+            signal: data.signal,
+            from: socket.id
+        });
+    });
+
     socket.on('startGame', () => {
-        if (players.length < 3) return; 
+        if (players.length < 2) return; 
         
         let pool = [...players];
         const vIndex = Math.floor(Math.random() * pool.length);
         const vampire = pool.splice(vIndex, 1)[0];
-        const dIndex = Math.floor(Math.random() * pool.length);
-        const doctor = pool.splice(dIndex, 1)[0];
+        
+        let doctor = null;
+        if (pool.length > 0) {
+            const dIndex = Math.floor(Math.random() * pool.length);
+            doctor = pool.splice(dIndex, 1)[0];
+        }
 
         players.forEach(p => {
             if (p.id === vampire.id) p.role = 'Vampir';
-            else if (p.id === doctor.id) p.role = 'Doktor';
+            else if (doctor && p.id === doctor.id) p.role = 'Doktor';
             else p.role = 'Köylü';
             p.alive = true;
             io.to(p.id).emit('assignRole', p.role);
@@ -45,50 +57,38 @@ io.on('connection', (socket) => {
         gameState = "night";
         votes = {};
         protectedId = null;
-        io.emit('gameUpdate', { 
-            state: "night", 
-            message: "🌙 Gece çöktü... Roller gizli görevlerini yapıyor.", 
-            players: players 
-        });
+        io.emit('gameUpdate', { state: "night", message: "🌙 Gece oldu. Sessiz olun...", players });
     }
 
-    socket.on('doctorAction', (targetId) => {
-        const doc = players.find(p => p.id === socket.id);
-        if (gameState === "night" && doc && doc.role === 'Doktor' && doc.alive) {
-            protectedId = targetId;
-            socket.emit('announcement', "🛡️ Bu oyuncuyu bu gece koruyorsun!");
+    socket.on('vampireAction', (targetId) => {
+        if (gameState === "night" && targetId !== protectedId) {
+            const victim = players.find(p => p.id === targetId);
+            if (victim) victim.alive = false;
+            startDay(`💀 ${victim ? victim.name : "Biri"} gece öldü.`);
+        } else {
+            startDay("🏥 Doktor birini kurtardı!");
         }
     });
 
-    socket.on('vampireAction', (targetId) => {
-        const v = players.find(p => p.id === socket.id);
-        if (gameState === "night" && v && v.role === 'Vampir' && v.alive) {
-            if (targetId === protectedId) {
-                startDay("🏥 Doktor bir hayat kurtardı! Kimse ölmedi.");
-            } else {
-                const victim = players.find(p => p.id === targetId);
-                if (victim) {
-                    victim.alive = false;
-                    startDay(`💀 ${victim.name} dün gece kurban edildi.`);
-                }
-            }
-        }
-    });
+    socket.on('doctorAction', (targetId) => { protectedId = targetId; });
 
     function startDay(news) {
         if (checkGameOver()) return;
         gameState = "day";
-        io.emit('gameUpdate', { state: "day", message: `☀️ Gün doğdu! ${news} Şimdi oylama vakti.`, players });
+        votes = {}; // Oyları sıfırla
+        io.emit('gameUpdate', { state: "day", message: `☀️ ${news} Tartışın ve oylayın!`, players });
     }
 
     socket.on('castVote', (targetId) => {
         if (gameState === "day") {
-            const voter = players.find(p => p.id === socket.id);
-            if (voter && voter.alive) {
-                votes[socket.id] = targetId;
-                const aliveOnes = players.filter(p => p.alive);
-                if (Object.keys(votes).length >= aliveOnes.length) tallyVotes();
+            votes[socket.id] = targetId;
+            const aliveCount = players.filter(p => p.alive).length;
+            
+            // Canlı oyuncu sayısı kadar oy gelmişse veya çoğunluk sağlanmışsa
+            if (Object.keys(votes).length >= aliveCount) {
+                tallyVotes();
             }
+            io.emit('voteUpdate', Object.keys(votes).length); // Kaç kişinin oy verdiğini göster
         }
     });
 
@@ -96,24 +96,19 @@ io.on('connection', (socket) => {
         const counts = {};
         Object.values(votes).forEach(id => counts[id] = (counts[id] || 0) + 1);
         let lynchedId = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b, null);
+        
         const victim = players.find(p => p.id === lynchedId);
-        if (victim) {
-            victim.alive = false;
-            io.emit('announcement', `📢 Köylüler toplandı ve ${victim.name} asıldı!`);
-        }
+        if (victim) victim.alive = false;
+        
+        io.emit('announcement', `📢 Köy kararıyla ${victim ? victim.name : "kimse"} asıldı!`);
         if (!checkGameOver()) setTimeout(startNight, 3000);
     }
 
     function checkGameOver() {
         const vamps = players.filter(p => p.role === 'Vampir' && p.alive);
         const citizens = players.filter(p => p.role !== 'Vampir' && p.alive);
-        if (vamps.length === 0) {
-            io.emit('announcement', "🏆 KÖYLÜLER KAZANDI!");
-            return true;
-        } else if (vamps.length >= citizens.length) {
-            io.emit('announcement', "🧛 VAMPİRLER KAZANDI!");
-            return true;
-        }
+        if (vamps.length === 0) { io.emit('announcement', "🏆 KÖYLÜLER KAZANDI!"); return true; }
+        if (vamps.length >= citizens.length) { io.emit('announcement', "🧛 VAMPİRLER KAZANDI!"); return true; }
         return false;
     }
 
@@ -124,4 +119,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Aktif: ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`Server: ${PORT}`));

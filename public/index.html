@@ -1,59 +1,51 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Vampir Köylü: 2D Edition</title>
+    <title>Vampir Köylü: Voice Edition</title>
     <style>
-        body { background: #1a1c2c; color: white; font-family: 'Segoe UI', sans-serif; transition: background 1.5s; text-align: center; margin: 0; }
+        body { background: #1a1c2c; color: white; font-family: sans-serif; text-align: center; }
+        .player-card { background: #2f357d; border-radius: 10px; padding: 15px; margin: 10px; display: flex; justify-content: space-between; }
         .night { background: #070914; }
-        #game-container { max-width: 600px; margin: 40px auto; padding: 20px; }
-        
-        /* 2D Kart Tasarımı */
-        .player-card {
-            background: #2f357d; border-radius: 15px; padding: 15px; margin: 10px 0;
-            display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;
-            animation: slideIn 0.5s ease-out;
-        }
-        .player-card:hover { transform: scale(1.03); }
-        .dead { filter: grayscale(1); opacity: 0.6; animation: shake 0.4s; border: 2px solid red; }
-
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-50px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(3deg); } 75% { transform: rotate(-3deg); } }
-
-        /* Butonlar */
-        button { border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-join { background: #4ecca3; color: #1a1c2c; }
-        .btn-kill { background: #ff4b5c; color: white; }
-        .btn-heal { background: #00d2ff; color: white; }
-        .btn-vote { background: #f9d423; color: #333; }
-
-        #status-bar { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; font-style: italic; }
-        #role-tag { font-size: 1.5rem; text-transform: uppercase; margin-bottom: 10px; display: block; }
+        .dead { opacity: 0.5; filter: grayscale(1); }
+        button { cursor: pointer; padding: 8px; border-radius: 5px; border: none; font-weight: bold; }
+        #voice-btn { background: #ff4b5c; margin-bottom: 10px; }
     </style>
 </head>
 <body id="bg">
-    <div id="game-container">
-        <h1>🧛‍♂️ Vampir Köylü 2D</h1>
-        
-        <div id="setup">
-            <input type="text" id="nameInp" placeholder="Adını yaz..." style="padding: 10px; border-radius: 5px;">
-            <button class="btn-join" onclick="join()">Katıl</button>
-        </div>
-
-        <div id="game-ui" style="display:none;">
-            <span id="role-tag">Rolün Belirleniyor...</span>
-            <div id="status-bar">Lobi bekleniyor...</div>
-            <div id="player-list"></div>
-            <br>
-            <button id="start-btn" class="btn-join" onclick="start()">Oyunu Başlat</button>
-        </div>
+    <h1>🧛‍♂️ Vampir Köylü Voice</h1>
+    
+    <div id="setup">
+        <input type="text" id="nameInp" placeholder="Adın...">
+        <button onclick="join()">Katıl</button>
     </div>
+
+    <div id="game-ui" style="display:none;">
+        <button id="voice-btn" onclick="toggleMic()">🎤 Mikrofonu Aç</button>
+        <div id="role-tag"></div>
+        <div id="status-bar">Lobi...</div>
+        <div id="player-list"></div>
+        <button id="start-btn" onclick="start()">Oyunu Başlat</button>
+    </div>
+
+    <div id="audio-container"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
         let myRole = "";
+        let stream;
+
+        async function toggleMic() {
+            try {
+                if (!stream) {
+                    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    document.getElementById('voice-btn').innerText = "🎤 Mikrofon Açık";
+                    document.getElementById('voice-btn').style.background = "#4ecca3";
+                    // Burada normalde WebRTC sinyalleşmesi gerekir, 
+                    // şimdilik mikrofon izni aldığımızı varsayıyoruz.
+                }
+            } catch (err) { alert("Mikrofon izni reddedildi!"); }
+        }
 
         function join() {
             const n = document.getElementById('nameInp').value;
@@ -68,36 +60,29 @@
 
         socket.on('assignRole', (role) => {
             myRole = role;
-            const tag = document.getElementById('role-tag');
-            tag.innerText = "Rolün: " + role;
-            tag.style.color = role === 'Vampir' ? '#ff4b5c' : (role === 'Doktor' ? '#00d2ff' : '#4ecca3');
+            document.getElementById('role-tag').innerText = "ROLÜN: " + role;
             document.getElementById('start-btn').style.display = 'none';
         });
 
         socket.on('gameUpdate', (data) => {
             document.getElementById('bg').className = data.state === 'night' ? 'night' : '';
             document.getElementById('status-bar').innerText = data.message;
-            
             const list = document.getElementById('player-list');
             list.innerHTML = "";
 
             data.players.forEach(p => {
                 const card = document.createElement('div');
                 card.className = `player-card ${p.alive ? '' : 'dead'}`;
-                card.innerHTML = `<span>${p.name} ${p.alive ? '👤' : '💀'}</span>`;
+                card.innerHTML = `<span>${p.name}</span>`;
                 
                 if (p.alive && p.id !== socket.id) {
                     const btn = document.createElement('button');
                     if (data.state === "night" && myRole === "Vampir") {
-                        btn.innerText = "Saldır"; btn.className = "btn-kill";
+                        btn.innerText = "Saldır";
                         btn.onclick = () => socket.emit('vampireAction', p.id);
                         card.appendChild(btn);
-                    } else if (data.state === "night" && myRole === "Doktor") {
-                        btn.innerText = "Koru"; btn.className = "btn-heal";
-                        btn.onclick = () => socket.emit('doctorAction', p.id);
-                        card.appendChild(btn);
                     } else if (data.state === "day") {
-                        btn.innerText = "Oyla"; btn.className = "btn-vote";
+                        btn.innerText = "Oyla";
                         btn.onclick = () => socket.emit('castVote', p.id);
                         card.appendChild(btn);
                     }
@@ -107,12 +92,6 @@
         });
 
         socket.on('announcement', (m) => alert(m));
-        socket.on('updatePlayerList', (players) => {
-            if(myRole === "") {
-                const list = document.getElementById('player-list');
-                list.innerHTML = players.map(p => `<div class="player-card"><span>${p.name} 👤</span></div>`).join('');
-            }
-        });
     </script>
 </body>
 </html>
