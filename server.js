@@ -50,6 +50,9 @@ io.on('connection', (socket) => {
 // RENDER İÇİN KRİTİK DEĞİŞİKLİK:
 // Portu ortam değişkeninden al, yoksa 3000 kullan.
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Oyun ${PORT} portu üzerinde yayında!`);
+const PORT = process.env.PORT || 3000;
+
+// '0.0.0.0' eklemek Render'ın dışarıdan erişim sağlaması için bazen kritiktir
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Sunucu ${PORT} portunda aktif!`);
 });
