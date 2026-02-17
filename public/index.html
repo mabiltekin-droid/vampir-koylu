@@ -3,29 +3,45 @@
 <head>
     <title>Vampir Köylü Online</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; }
-        #game-box { margin-top: 50px; border: 2px solid #444; padding: 20px; display: inline-block; }
-        .vampire { color: red; font-weight: bold; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; text-align: center; padding: 20px; }
+        #game-box { margin-top: 30px; border: 2px solid #333; padding: 20px; display: inline-block; border-radius: 15px; background: #1e1e1e; min-width: 300px; }
+        .vampire { color: #ff4d4d; font-weight: bold; text-shadow: 0 0 10px rgba(255,0,0,0.5); }
+        ul { list-style: none; padding: 0; }
+        li { background: #2a2a2a; margin: 10px 0; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        button { cursor: pointer; padding: 8px 15px; border-radius: 5px; border: none; background: #4a90e2; color: white; font-weight: bold; }
+        button:hover { background: #357abd; }
+        .action-btn { background: #e94b3c; margin-left: 10px; }
+        #status { font-style: italic; color: #bbb; margin-bottom: 20px; }
     </style>
 </head>
 <body>
     <h1>🧛‍♂️ Vampir Köylü</h1>
+    
     <div id="setup">
-        <input type="text" id="username" placeholder="Adın ne?">
+        <input type="text" id="username" placeholder="Adın ne?" style="padding: 10px; border-radius: 5px; border: none;">
         <button onclick="join()">Katıl</button>
     </div>
 
     <div id="game-box" style="display:none;">
-        <h2 id="role-display">Rolün Bekleniyor...</h2>
-        <p id="status">Lobi bekleniyor...</p>
+        <h2 id="role-display">Lobi Bekleniyor...</h2>
+        <p id="status">Oyuncuların toplanması bekleniyor...</p>
+        
         <ul id="player-list"></ul>
+        
+        <br>
         <button id="start-btn" onclick="start()">Oyunu Başlat</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        
+        let myId = "";
+        let myRole = "";
+
+        socket.on('connect', () => {
+            myId = socket.id;
+        });
+
         function join() {
             const name = document.getElementById('username').value;
             if(name) {
@@ -39,20 +55,56 @@
             socket.emit('startGame');
         }
 
+        // Rol Atandığında
+        socket.on('assignRole', (role) => {
+            myRole = role;
+            const el = document.getElementById('role-display');
+            el.innerText = "Rolün: " + role;
+            if(role === 'Vampir') el.className = 'vampire';
+            document.getElementById('start-btn').style.display = 'none';
+        });
+
+        // Liste Güncellendiğinde (Lobi ve Canlı/Ölü Takibi)
         socket.on('updatePlayerList', (players) => {
             const list = document.getElementById('player-list');
             list.innerHTML = players.map(p => `<li>${p.name} ${p.alive ? '✅' : '💀'}</li>`).join('');
         });
 
-        socket.on('assignRole', (role) => {
-            const el = document.getElementById('role-display');
-            el.innerText = "Rolün: " + role;
-            if(role === 'Vampir') el.className = 'vampire';
+        // Oyunun Gece/Gündüz Döngüsü ve Butonlar
+        socket.on('gameUpdate', (data) => {
+            document.getElementById('status').innerText = data.message;
+            const list = document.getElementById('player-list');
+            list.innerHTML = "";
+
+            data.players.forEach(p => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span>${p.name} ${p.alive ? '✅' : '💀'}</span>`;
+                
+                // Eğer ben hayattaysam ve hedef oyuncu hayattaysa buton ekle
+                const me = data.players.find(player => player.id === socket.id);
+                
+                if (me && me.alive && p.alive && p.id !== socket.id) {
+                    const btn = document.createElement('button');
+                    btn.className = "action-btn";
+
+                    if (data.state === "night" && myRole === "Vampir") {
+                        btn.innerText = "Kurban Seç";
+                        btn.onclick = () => socket.emit('vampireAction', p.id);
+                        li.appendChild(btn);
+                    } else if (data.state === "day") {
+                        btn.innerText = "Oyla";
+                        btn.style.background = "#f39c12";
+                        btn.onclick = () => socket.emit('castVote', p.id);
+                        li.appendChild(btn);
+                    }
+                }
+                list.appendChild(li);
+            });
         });
 
-        socket.on('gameStarted', (data) => {
-            document.getElementById('status').innerText = "Oyun Başladı! Gece oldu...";
-            document.getElementById('start-btn').style.display = 'none';
+        // Önemli Duyurular (Asıldı, Kazandı vs.)
+        socket.on('announcement', (msg) => {
+            alert(msg);
         });
     </script>
 </body>
