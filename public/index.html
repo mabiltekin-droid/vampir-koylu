@@ -2,208 +2,215 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Vampir Köylü 3D: Pro Max</title>
+    <title>Vampir Köylü: Pro Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; color: white; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        :root { --primary: #4ecca3; --danger: #ff4b5c; --bg: #1a1c2c; --card: #2f357d; }
+        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; height: 100vh; overflow: hidden; }
         
-        /* HUDs */
-        .hud { pointer-events: auto; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 1px solid #4ecca3; }
-        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
-        #top-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; min-width: 300px; }
+        #game-container { width: 100%; max-width: 900px; display: grid; grid-template-columns: 250px 1fr 250px; gap: 10px; padding: 10px; }
         
-        /* Chat */
-        #chat-area { position: absolute; left: 20px; bottom: 150px; width: 280px; height: 200px; display: flex; flex-direction: column; }
-        #messages { flex: 1; overflow-y: auto; background: rgba(0,0,0,0.5); padding: 5px; font-size: 0.8rem; border-radius: 5px; }
-        #chat-input { background: #222; border: 1px solid #4a90e2; color: white; padding: 10px; }
-
-        /* Timer */
-        #timer { font-size: 2rem; color: #f9d423; font-weight: bold; }
-
-        /* Floating Names (İsim Etiketleri) */
-        .player-label { color: white; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; }
-
-        .player-actions { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 10px; pointer-events: auto; }
-        .action-card { background: rgba(30, 30, 60, 0.9); padding: 10px; border-radius: 10px; text-align: center; border: 1px solid #4a90e2; }
+        /* Paneller */
+        .panel { background: rgba(0,0,0,0.3); border-radius: 15px; padding: 15px; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.1); }
+        .scroll { overflow-y: auto; flex: 1; }
         
-        button { padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; }
-        #vampire-chat-toggle { background: #ff4b5c; margin-top: 5px; display: none; }
+        /* Oyuncu Kartları */
+        .p-card { background: var(--card); padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid var(--primary); transition: 0.2s; }
+        .p-card.dead { opacity: 0.4; filter: grayscale(1); border-left-color: #555; }
+        .p-card:hover { transform: scale(1.02); }
+        
+        /* Chat & Log */
+        #log { font-size: 11px; color: #bbb; border-bottom: 1px solid #444; margin-bottom: 5px; padding-bottom: 5px; }
+        #chat { font-size: 13px; }
+        .msg { margin-bottom: 4px; border-radius: 4px; padding: 2px 5px; }
 
-        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; }
+        /* Timer ve Status */
+        #status-area { grid-column: 1 / 4; background: var(--card); padding: 10px; border-radius: 12px; text-align: center; }
+        .timer { font-size: 28px; font-weight: bold; color: #f9d423; }
+
+        /* Kontroller */
+        .controls { display: flex; gap: 5px; margin-top: 5px; }
+        input { background: #222; border: 1px solid #444; color: white; padding: 8px; border-radius: 5px; flex: 1; }
+        button { background: var(--primary); color: var(--bg); border: none; padding: 8px 15px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        button:disabled { background: #555; }
+
+        /* Modallar */
+        #modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; z-index: 100; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+        
+        .vampire-only { border: 1px solid var(--danger) !important; box-shadow: 0 0 10px rgba(255,75,92,0.2); }
     </style>
 </head>
 <body>
 
-    <div id="ui-layer">
-        <div id="setup" class="hud">
-            <h1 style="color:#4ecca3">Vampir Köylü 3D</h1>
-            <input type="text" id="nameInp" placeholder="Adın..." style="padding:10px; width:200px;">
-            <button onclick="join()" style="background:#4ecca3">KATIL</button>
-        </div>
-
-        <div id="top-bar" class="hud" style="display:none;">
-            <div id="timer">00</div>
-            <div id="role-text" style="font-weight:bold;"></div>
-            <div id="status-text">Lobi...</div>
-            <button id="start-btn" onclick="start()">OYUNU BAŞLAT</button>
-        </div>
-
-        <div id="chat-area" class="hud" style="display:none;">
-            <div id="messages"></div>
-            <input type="text" id="chat-input" placeholder="Mesaj (Enter)...">
-            <button id="vampire-chat-toggle" onclick="toggleVampireChat()">Vampir Chat: KAPALI</button>
-        </div>
-
-        <div id="player-actions" class="player-actions"></div>
+    <div id="setup" style="position:fixed; z-index:200; background:var(--bg); width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+        <h1 style="color:var(--primary); font-size: 3rem;">VAMPİR KÖYLÜ</h1>
+        <input type="text" id="nameInp" placeholder="Efsanevi adını yaz..." style="font-size: 1.5rem; padding: 15px; width: 300px;">
+        <br>
+        <button onclick="join()" style="font-size: 1.5rem; padding: 15px 40px;">KÖYE GİRİŞ YAP</button>
     </div>
 
-    <div id="game-over-screen">
-        <h1 id="winner-text"></h1>
-        <p>Lobiye dönülüyor...</p>
+    <div id="game-container">
+        <div id="status-area">
+            <div id="status-msg">Lobi bekleniyor... En az 4 kişi gerekli.</div>
+            <div id="timer" class="timer">--</div>
+            <button id="start-btn" onclick="socket.emit('startGame')">OYUNU BAŞLAT</button>
+        </div>
+
+        <div class="panel">
+            <h3>Köy Halkı</h3>
+            <div id="player-list" class="scroll"></div>
+        </div>
+
+        <div class="panel">
+            <div id="log" class="scroll"></div>
+            <div id="chat" class="scroll"></div>
+            <div class="controls">
+                <input type="text" id="chatInp" placeholder="Mesaj yaz veya oyuncuya tıkla fısılda...">
+                <button onclick="sendMsg()">GÖNDER</button>
+            </div>
+            <div id="vampire-controls" style="display:none; margin-top:5px;">
+                <button onclick="toggleVampireChat()" id="v-btn" style="background:var(--danger); color:white; width:100%;">VAMPİR KONSEYİ: KAPALI</button>
+            </div>
+            <button id="finish-night-btn" onclick="socket.emit('finishNight')" style="display:none; margin-top:5px; background:orange;">GECEYİ BİTİR (Yönetici)</button>
+        </div>
+
+        <div class="panel">
+            <h3>Bilgilerim</h3>
+            <div id="my-info" style="background:rgba(255,255,255,0.1); padding:10px; border-radius:10px;">
+                <div id="my-role" style="font-size: 1.2rem; font-weight:bold;">Rol: ?</div>
+                <hr>
+                <small>İpucu: Geceleri rolüne göre oyuncu kartlarındaki butonları kullan!</small>
+            </div>
+            <h3 style="margin-top:20px;">Özel Görevler</h3>
+            <div id="quests" style="font-size:0.8rem; color:#888;">Henüz görev yok.</div>
+        </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <div id="modal">
+        <h1 id="modal-title" style="color:var(--primary); font-size: 4rem;">OYUN BİTTİ</h1>
+        <div id="modal-content" style="max-width: 600px; font-size: 1.2rem;"></div>
+        <br>
+        <button onclick="location.reload()">LOBİYE DÖN</button>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
-
     <script>
-        let scene, camera, renderer, players3D = {}, labels = [];
         const socket = io();
-        let myRole = "", isVampireChat = false;
-
-        function init3D() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x050505);
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
-
-            const table = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 0.5, 32), new THREE.MeshStandardMaterial({ color: 0x222 }));
-            scene.add(table);
-            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-            const pLight = new THREE.PointLight(0xffffff, 1, 50);
-            pLight.position.set(0, 5, 0);
-            scene.add(pLight);
-
-            camera.position.set(0, 7, 10);
-            camera.lookAt(0, 0, 0);
-            animate();
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
-            updateLabels();
-        }
-
-        // İsim Etiketlerini Güncelle
-        function updateLabels() {
-            labels.forEach(l => {
-                const vector = l.pos.clone().project(camera);
-                const x = (vector.x * .5 + .5) * window.innerWidth;
-                const y = (-(vector.y * .5) + .5) * window.innerHeight;
-                l.el.style.transform = `translate(-50%, -50%) translate(${x}px,${y}px)`;
-            });
-        }
+        let myRole = "";
+        let isVChat = false;
+        let selectedTargetId = null;
 
         function join() {
             const n = document.getElementById('nameInp').value;
             if(n) {
                 socket.emit('joinGame', n);
                 document.getElementById('setup').style.display = 'none';
-                document.getElementById('top-bar').style.display = 'block';
-                document.getElementById('chat-area').style.display = 'flex';
-                init3D();
             }
         }
 
-        function start() { socket.emit('startGame'); }
+        function sendMsg() {
+            const inp = document.getElementById('chatInp');
+            if(inp.value) {
+                socket.emit('sendMessage', { 
+                    text: inp.value, 
+                    type: isVChat ? 'vampire' : 'global',
+                    targetId: selectedTargetId 
+                });
+                inp.value = "";
+                selectedTargetId = null;
+                inp.placeholder = "Mesaj yaz...";
+            }
+        }
 
         function toggleVampireChat() {
-            isVampireChat = !isVampireChat;
-            document.getElementById('vampire-chat-toggle').innerText = isVampireChat ? "Vampir Chat: AÇIK" : "Vampir Chat: KAPALI";
+            isVChat = !isVChat;
+            document.getElementById('v-btn').innerText = isVChat ? "VAMPİR KONSEYİ: AÇIK" : "VAMPİR KONSEYİ: KAPALI";
         }
 
-        document.getElementById('chat-input').addEventListener('keypress', (e) => {
-            if(e.key === 'Enter' && e.target.value) {
-                socket.emit('sendMessage', { text: e.target.value, type: isVampireChat ? 'vampire' : 'global' });
-                e.target.value = '';
-            }
-        });
-
-        socket.on('assignRole', (role) => {
-            myRole = role;
-            document.getElementById('role-text').innerText = "ROLÜN: " + role;
-            if(role === 'Vampir') document.getElementById('vampire-chat-toggle').style.display = 'block';
+        socket.on('assignRole', r => {
+            myRole = r;
+            document.getElementById('my-role').innerText = "Rolün: " + r;
+            document.getElementById('my-role').style.color = (r === 'Vampir') ? '#ff4b5c' : '#4ecca3';
+            if(r === 'Vampir') document.getElementById('vampire-controls').style.display = 'block';
             document.getElementById('start-btn').style.display = 'none';
+            
+            // Sadece yöneticiye geceyi bitirme yetkisi (simülasyon)
+            document.getElementById('finish-night-btn').style.display = 'block';
         });
 
-        socket.on('gameUpdate', (data) => {
-            document.getElementById('status-text').innerText = data.message;
-            // Dinamik Kamera Hareketi
-            if(data.state === 'night') {
-                camera.position.set(0, 12, 0); // Kuş Bakışı
-                camera.lookAt(0,0,0);
-            } else {
-                camera.position.set(0, 7, 10); // Tartışma Açısı
-                camera.lookAt(0,0,0);
-            }
-            update3DPlayers(data.players);
-            updateHUD(data.players, data.state);
-        });
-
-        function update3DPlayers(players) {
-            players.forEach((p, i) => {
-                if(!players3D[p.id]) {
-                    const char = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8, 4, 8), new THREE.MeshStandardMaterial({ color: 0x4a90e2 }));
-                    const angle = (i / players.length) * Math.PI * 2;
-                    const x = Math.cos(angle)*4, z = Math.sin(angle)*4;
-                    char.position.set(x, 0.8, z);
-                    scene.add(char);
-                    players3D[p.id] = char;
-
-                    // İsim Etiketi Oluştur
-                    const el = document.createElement('div');
-                    el.className = 'player-label';
-                    el.innerText = p.name;
-                    document.body.appendChild(el);
-                    labels.push({ el, pos: new THREE.Vector3(x, 2, z) });
-                }
-                if(!p.alive) players3D[p.id].rotation.z = Math.PI/2;
-            });
-        }
-
-        function updateHUD(players, state) {
-            const container = document.getElementById('player-actions');
-            container.innerHTML = "";
-            players.forEach(p => {
+        socket.on('gameUpdate', data => {
+            document.body.style.background = (data.state === 'night') ? '#070914' : '#1a1c2c';
+            document.getElementById('status-msg').innerText = data.message;
+            
+            const list = document.getElementById('player-list');
+            list.innerHTML = "";
+            data.players.forEach(p => {
+                const card = document.createElement('div');
+                card.className = `p-card ${p.alive ? '' : 'dead'}`;
+                card.innerHTML = `<strong>${p.name}</strong>`;
+                
                 if(p.alive && p.id !== socket.id) {
-                    const card = document.createElement('div');
-                    card.className = "action-card";
-                    card.innerHTML = `<div>${p.name}</div>`;
-                    const btn = document.createElement('button');
-                    if(state === 'night') {
-                        if(myRole==='Vampir'){ btn.innerText="SALDIR"; btn.onclick=()=>socket.emit('vampireAction', p.id); card.appendChild(btn); }
-                        if(myRole==='Doktor'){ btn.innerText="KORU"; btn.onclick=()=>socket.emit('doctorAction', p.id); card.appendChild(btn); }
-                        if(myRole==='Kahin'){ btn.innerText="GÖRÜ"; btn.onclick=()=>socket.emit('seerAction', p.id); card.appendChild(btn); }
-                    } else if(state === 'day') {
-                        btn.innerText="OYLA"; btn.onclick=()=>socket.emit('castVote', p.id); card.appendChild(btn);
+                    const btnArea = document.createElement('div');
+                    btnArea.className = "controls";
+                    
+                    const actionBtn = document.createElement('button');
+                    if(data.state === 'night') {
+                        if(myRole === 'Vampir') actionBtn.innerText = "Saldır";
+                        else if(myRole === 'Doktor') actionBtn.innerText = "Koru";
+                        else if(myRole === 'Kahin') actionBtn.innerText = "Görü Al";
+                        
+                        actionBtn.onclick = () => socket.emit('nightAction', { targetId: p.id });
+                        if(['Vampir', 'Doktor', 'Kahin'].includes(myRole)) btnArea.appendChild(actionBtn);
+                    } else {
+                        actionBtn.innerText = "OYLA";
+                        actionBtn.onclick = () => socket.emit('castVote', p.id);
+                        btnArea.appendChild(actionBtn);
                     }
-                    container.appendChild(card);
+                    
+                    const whisperBtn = document.createElement('button');
+                    whisperBtn.innerText = "💬";
+                    whisperBtn.style.background = "#777";
+                    whisperBtn.onclick = () => {
+                        selectedTargetId = p.id;
+                        document.getElementById('chatInp').placeholder = `${p.name} kişisine fısılda...`;
+                        document.getElementById('chatInp').focus();
+                    };
+                    btnArea.appendChild(whisperBtn);
+                    
+                    card.appendChild(btnArea);
                 }
+                list.appendChild(card);
             });
-        }
-
-        socket.on('receiveMessage', (d) => {
-            const m = document.getElementById('messages');
-            m.innerHTML += `<div style="color:${d.color || 'white'}"><b>${d.name}:</b> ${d.text}</div>`;
-            m.scrollTop = m.scrollHeight;
         });
 
-        socket.on('timerUpdate', (t) => { document.getElementById('timer').innerText = t; });
-        socket.on('gameOver', (d) => { document.getElementById('game-over-screen').style.display='flex'; document.getElementById('winner-text').innerText=d.winner; });
-        socket.on('returnToLobby', () => location.reload());
-        socket.on('announcement', (m) => alert(m));
+        socket.on('receiveMessage', d => {
+            const c = document.getElementById('chat');
+            c.innerHTML += `<div class="msg" style="color:${d.color}"><b>${d.name}:</b> ${d.text}</div>`;
+            c.scrollTop = c.scrollHeight;
+        });
+
+        socket.on('announcement', m => {
+            const log = document.getElementById('log');
+            log.innerHTML += `<div>🔔 ${m}</div>`;
+            log.scrollTop = log.scrollHeight;
+        });
+
+        socket.on('timerUpdate', t => { document.getElementById('timer').innerText = t > 0 ? t : "--"; });
+
+        socket.on('gameOver', data => {
+            const modal = document.getElementById('modal');
+            const content = document.getElementById('modal-content');
+            modal.style.display = "flex";
+            document.getElementById('modal-title').innerText = data.winner + " KAZANDI!";
+            
+            let html = "<h3>Oyun Günlüğü</h3><div style='text-align:left; font-size:0.9rem;'>";
+            data.logs.forEach(l => html += `<li>${l}</li>`);
+            html += "</div><h3>Roller</h3>";
+            data.stats.forEach(s => html += `${s.name}: <b>${s.role}</b> | `);
+            content.innerHTML = html;
+        });
+
+        socket.on('reload', () => location.reload());
+        document.getElementById('chatInp').addEventListener('keypress', e => { if(e.key === 'Enter') sendMsg(); });
     </script>
 </body>
 </html>
