@@ -2,48 +2,21 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Vampir Köylü 3D: Pro Edition</title>
+    <title>Vampir Köylü 3D: Pro</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
-        
-        /* Arayüz Katmanı */
-        #ui-layer { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            pointer-events: none; z-index: 10; display: flex; flex-direction: column; align-items: center; 
-        }
-        
-        .hud-top { 
-            pointer-events: auto; background: rgba(0,0,0,0.8); color: white; 
-            padding: 15px 30px; border-radius: 0 0 20px 20px; text-align: center;
-            border: 1px solid #4ecca3; border-top: none;
-        }
-
-        #setup { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            pointer-events: auto; background: #1a1c2c; padding: 30px; border-radius: 20px;
-            box-shadow: 0 0 20px rgba(78, 204, 163, 0.5); text-align: center;
-        }
-
-        .player-actions-container {
-            position: absolute; bottom: 30px; width: 90%; display: flex; 
-            justify-content: center; gap: 10px; overflow-x: auto; pointer-events: auto;
-        }
-
-        .action-card {
-            background: rgba(47, 53, 125, 0.9); padding: 10px; border-radius: 10px;
-            min-width: 120px; text-align: center; border: 2px solid #4a90e2; color: white;
-        }
-
-        button { 
-            padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; 
-            font-weight: bold; transition: 0.3s; margin-top: 5px;
-        }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; align-items: center; }
+        .hud-top { pointer-events: auto; background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 0 0 20px 20px; text-align: center; border: 1px solid #4ecca3; border-top: none; }
+        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; background: #1a1c2c; padding: 30px; border-radius: 20px; box-shadow: 0 0 20px rgba(78, 204, 163, 0.5); text-align: center; }
+        .player-actions-container { position: absolute; bottom: 30px; width: 90%; display: flex; justify-content: center; gap: 10px; overflow-x: auto; pointer-events: auto; }
+        .action-card { background: rgba(47, 53, 125, 0.9); padding: 10px; border-radius: 10px; min-width: 120px; text-align: center; border: 2px solid #4a90e2; color: white; }
+        button { padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; transition: 0.3s; margin-top: 5px; }
         .btn-join { background: #4ecca3; color: #1a1c2c; }
         .btn-kill { background: #ff4b5c; color: white; }
         .btn-heal { background: #00d2ff; color: white; }
         .btn-vote { background: #f9d423; color: #333; }
-        
-        .dead-label { color: #ff4b5c; font-size: 0.8rem; font-weight: bold; }
+        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; color: white; pointer-events: auto; }
+        #winner-text { font-size: 3rem; color: #f9d423; text-shadow: 0 0 20px #f9d423; margin: 0; }
     </style>
 </head>
 <body>
@@ -65,6 +38,11 @@
         <div id="player-actions" class="player-actions-container"></div>
     </div>
 
+    <div id="game-over-screen">
+        <h1 id="winner-text">KAZANAN</h1>
+        <p style="font-size: 1.2rem;">5 saniye içinde lobiye dönülüyor...</p>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 
@@ -75,29 +53,23 @@
         let currentGameState = "";
 
         function init3D() {
+            if(renderer) return;
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x0a0a0a);
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
-
-            // Masa
             const tableGeo = new THREE.CylinderGeometry(5, 5, 0.5, 32);
             const tableMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
             const table = new THREE.Mesh(tableGeo, tableMat);
             scene.add(table);
-
-            // Işıklar
-            const ambient = new THREE.AmbientLight(0x404040, 2);
-            scene.add(ambient);
-            const pointLight = new THREE.PointLight(0xffffff, 1, 100);
-            pointLight.position.set(0, 5, 0);
-            scene.add(pointLight);
-
+            scene.add(new THREE.AmbientLight(0x404040, 2));
+            const light = new THREE.PointLight(0xffffff, 1, 100);
+            light.position.set(0, 5, 0);
+            scene.add(light);
             camera.position.set(0, 8, 10);
             camera.lookAt(0, 0, 0);
-
             animate();
         }
 
@@ -129,11 +101,7 @@
         socket.on('gameUpdate', (data) => {
             currentGameState = data.state;
             document.getElementById('status-text').innerText = data.message;
-            
-            // Gece/Gündüz Işıklandırması
-            if(data.state === "night") scene.background = new THREE.Color(0x000005);
-            else scene.background = new THREE.Color(0x0a0a0a);
-
+            scene.background = new THREE.Color(data.state === "night" ? 0x000005 : 0x0a0a0a);
             updateHUD(data.players);
             update3DPlayers(data.players);
         });
@@ -149,23 +117,20 @@
                     scene.add(mesh);
                     players3D[p.id] = mesh;
                 }
-                // Ölenleri yatır
                 if(!p.alive) players3D[p.id].rotation.z = Math.PI / 2;
+                else players3D[p.id].rotation.z = 0;
             });
         }
 
         function updateHUD(players) {
             const container = document.getElementById('player-actions');
             container.innerHTML = "";
-
             players.forEach(p => {
                 const card = document.createElement('div');
                 card.className = "action-card";
                 card.innerHTML = `<div>${p.name}</div>`;
-                
-                if (!p.alive) {
-                    card.innerHTML += `<div class="dead-label">ÖLDÜ</div>`;
-                } else if (p.id !== socket.id) {
+                if (!p.alive) card.innerHTML += `<div style="color:red">ÖLDÜ</div>`;
+                else if (p.id !== socket.id) {
                     const btn = document.createElement('button');
                     if (currentGameState === "night" && myRole === "Vampir") {
                         btn.innerText = "SALDIR"; btn.className = "btn-kill";
@@ -185,17 +150,25 @@
             });
         }
 
-        socket.on('announcement', (m) => alert(m));
-        
-        socket.on('updatePlayerList', (players) => {
-            if(currentGameState === "") updateHUD(players);
+        socket.on('gameOver', (data) => {
+            document.getElementById('game-over-screen').style.display = 'flex';
+            document.getElementById('winner-text').innerText = data.winner;
         });
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        socket.on('returnToLobby', (updatedPlayers) => {
+            document.getElementById('game-over-screen').style.display = 'none';
+            myRole = ""; currentGameState = "";
+            document.getElementById('role-text').innerText = "Lobi Bekleniyor...";
+            document.getElementById('start-btn').style.display = 'inline-block';
+            for (let id in players3D) scene.remove(players3D[id]);
+            players3D = {};
+            updateHUD(updatedPlayers);
+            update3DPlayers(updatedPlayers);
         });
+
+        socket.on('announcement', (m) => alert(m));
+        socket.on('updatePlayerList', (players) => { if(currentGameState === "") updateHUD(players); });
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
 </body>
 </html>

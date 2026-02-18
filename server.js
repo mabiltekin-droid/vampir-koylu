@@ -46,25 +46,21 @@ io.on('connection', (socket) => {
     }
 
     socket.on('vampireAction', (targetId) => {
-        const v = players.find(p => p.id === socket.id);
-        if (gameState === "night" && v && v.role === 'Vampir' && v.alive) {
-            let killNews = "";
-            if (targetId === protectedId) {
-                killNews = "🏥 Doktor müdahale etti, kimse ölmedi!";
-            } else {
-                const victim = players.find(p => p.id === targetId);
-                if (victim) { victim.alive = false; killNews = `💀 ${victim.name} dün gece aramızdan ayrıldı.`; }
-            }
-            startDay(killNews);
+        if (gameState !== "night") return;
+        let killNews = "";
+        if (targetId === protectedId) {
+            killNews = "🏥 Doktor müdahale etti, kimse ölmedi!";
+        } else {
+            const victim = players.find(p => p.id === targetId);
+            if (victim) { victim.alive = false; killNews = `💀 ${victim.name} dün gece aramızdan ayrıldı.`; }
         }
+        startDay(killNews);
     });
 
     socket.on('doctorAction', (targetId) => {
-        const d = players.find(p => p.id === socket.id);
-        if (gameState === "night" && d && d.role === 'Doktor' && d.alive) {
-            protectedId = targetId;
-            socket.emit('announcement', "🛡️ Bu oyuncuyu koruyorsun.");
-        }
+        if (gameState !== "night") return;
+        protectedId = targetId;
+        socket.emit('announcement', "🛡️ Bu oyuncuyu koruyorsun.");
     });
 
     function startDay(news) {
@@ -94,8 +90,20 @@ io.on('connection', (socket) => {
     function checkGameOver() {
         const vamps = players.filter(p => p.role === 'Vampir' && p.alive);
         const citizens = players.filter(p => p.role !== 'Vampir' && p.alive);
-        if (vamps.length === 0) { io.emit('announcement', "🏆 KÖYLÜLER KAZANDI!"); return true; }
-        if (vamps.length >= citizens.length) { io.emit('announcement', "🧛 VAMPİRLER KAZANDI!"); return true; }
+
+        let winner = "";
+        if (vamps.length === 0) winner = "KÖYLÜLER KAZANDI! 🏆";
+        else if (vamps.length >= citizens.length) winner = "VAMPİRLER KAZANDI! 🧛";
+
+        if (winner !== "") {
+            io.emit('gameOver', { winner: winner });
+            setTimeout(() => {
+                gameState = "waiting";
+                players.forEach(p => { p.role = null; p.alive = true; });
+                io.emit('returnToLobby', players);
+            }, 5000);
+            return true;
+        }
         return false;
     }
 
