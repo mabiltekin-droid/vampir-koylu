@@ -2,23 +2,17 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Vampir Köylü: Görevler</title>
+    <title>Vampir Köylü: Fix</title>
     <style>
-        :root { --primary: #4ecca3; --vampire: #ff4b5c; --bg: #1a1c2c; }
+        :root { --primary: #4ecca3; --danger: #ff4b5c; --bg: #1a1c2c; }
         body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; }
         #app { display: grid; grid-template-columns: 280px 1fr 280px; height: 100vh; padding: 10px; gap: 10px; box-sizing: border-box; }
         .panel { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.1); }
         .scroll { overflow-y: auto; flex: 1; }
-        
-        /* Görevler */
-        .task-card { background: #3d445e; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid orange; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
-        .task-progress { width: 100%; height: 10px; background: #222; border-radius: 5px; margin: 10px 0; overflow: hidden; }
-        #progress-fill { height: 100%; width: 0%; background: var(--primary); transition: 0.5s; }
-
-        .p-card { background: #2f357d; padding: 10px; border-radius: 8px; margin-bottom: 5px; }
-        .dead { opacity: 0.4; grayscale: 1; }
-        button { background: var(--primary); border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .night-only { background: var(--vampire); color: white; }
+        .p-card { background: #2f357d; padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .dead { opacity: 0.3; filter: grayscale(1); }
+        button { background: var(--primary); border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .admin-btn { background: #f9d423; color: black; margin-top: 5px; }
         #chat { font-size: 13px; border-top: 1px solid #444; padding-top: 10px; }
     </style>
 </head>
@@ -26,40 +20,36 @@
 
     <div id="setup" style="position:fixed; width:100%; height:100%; z-index:100; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center;">
         <h1>🧛‍♂️ Vampir Köylü</h1>
-        <input type="text" id="nameInp" placeholder="Adınız..." style="padding:15px; width:250px; font-size:1.2rem;">
+        <input type="text" id="nameInp" placeholder="Adınız..." style="padding:15px; width:250px;">
         <br>
-        <button onclick="join()" style="padding:15px 50px; font-size:1.2rem;">OYUNA GİR</button>
+        <button onclick="join()" style="padding:15px 50px;">OYUNA GİR</button>
     </div>
 
     <div id="app">
         <div class="panel">
-            <h3>Köyün Durumu</h3>
-            <div class="task-progress"><div id="progress-fill"></div></div>
-            <small id="task-info">Tamamlanan Görevler: 0</small>
-            <hr>
+            <h3>Köy Halkı</h3>
             <div id="player-list" class="scroll"></div>
+            <hr>
+            <button class="admin-btn" onclick="socket.emit('adminResetGame')">⚠️ OYUNU SIFIRLA (RESET)</button>
         </div>
 
         <div class="panel">
-            <div id="status" style="text-align:center; font-weight:bold; color:var(--primary); margin-bottom:10px;">Lobi...</div>
-            <div id="timer" style="text-align:center; font-size:24px; color:gold;"></div>
-            <div id="log" class="scroll" style="font-size:12px; color:#aaa; margin-bottom:10px;"></div>
+            <div id="status" style="text-align:center; font-weight:bold; color:var(--primary); font-size: 1.2rem;">Lobi...</div>
+            <div id="timer" style="text-align:center; font-size:2rem; color:gold;"></div>
             <div id="chat" class="scroll"></div>
-            <div style="display:flex; gap:5px; margin-top:5px;">
-                <input type="text" id="chatInp" style="flex:1; padding:8px;" placeholder="Mesaj...">
+            <div style="display:flex; gap:5px; margin-top:10px;">
+                <input type="text" id="chatInp" style="flex:1; padding:10px; background:#222; border:1px solid #444; color:white;" placeholder="Mesaj...">
                 <button onclick="sendMsg()">GÖNDER</button>
             </div>
-            <button id="startBtn" onclick="socket.emit('startGame')" style="margin-top:10px; width:100%;">OYUNU BAŞLAT</button>
-            <button id="finishNightBtn" onclick="socket.emit('finishNight')" style="display:none; margin-top:5px; background:orange;">GECEYİ BİTİR</button>
+            <button id="startBtn" onclick="socket.emit('startGame')" style="margin-top:10px; width:100%; font-size:1.1rem;">OYUNU BAŞLAT</button>
+            <button id="finishNightBtn" onclick="socket.emit('finishNight')" style="display:none; margin-top:5px; background:orange; width:100%;">GECEYİ BİTİR</button>
         </div>
 
         <div class="panel">
             <h3 id="my-role">Rol: ?</h3>
             <hr>
             <h4>Görevlerim</h4>
-            <div id="task-list" class="scroll">
-                <p style="font-size:0.8rem; color:#888;">Oyun başlayınca görevlerin burada görünecek. Görevleri tamamlayarak köye ipucu kazandırabilirsin!</p>
-            </div>
+            <div id="task-list" class="scroll"></div>
         </div>
     </div>
 
@@ -84,49 +74,37 @@
             document.getElementById('my-role').style.color = (myRole === 'Vampir') ? '#ff4b5c' : '#4ecca3';
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('finishNightBtn').style.display = 'block';
-
-            // Görevleri listele
+            
             const tList = document.getElementById('task-list');
             tList.innerHTML = "";
             data.tasks.forEach(t => {
-                const div = document.createElement('div');
-                div.className = "task-card";
-                div.innerHTML = `<span>${t}</span> <button onclick="completeTask('${t}', this)">YAP</button>`;
-                tList.appendChild(div);
+                tList.innerHTML += `<div style="background:#3d445e; padding:8px; margin-bottom:5px; border-radius:5px; font-size:0.9rem;">📍 ${t}</div>`;
             });
-        });
-
-        function completeTask(name, btn) {
-            socket.emit('completeTask', name);
-            btn.parentElement.style.opacity = "0.3";
-            btn.disabled = true;
-            btn.innerText = "OK";
-        }
-
-        socket.on('taskGlobalUpdate', data => {
-            document.getElementById('task-info').innerText = "Tamamlanan Görevler: " + data.total;
-            document.getElementById('progress-fill').style.width = (data.total * 10) + "%"; // Her görev %10 doldurur
         });
 
         socket.on('gameUpdate', data => {
             document.getElementById('status').innerText = data.message;
-            document.body.style.background = (data.state === 'night') ? '#070914' : '#1a1c2c';
-            
             const pList = document.getElementById('player-list');
             pList.innerHTML = "";
             data.players.forEach(p => {
                 const div = document.createElement('div');
                 div.className = `p-card ${p.alive ? '' : 'dead'}`;
-                div.innerHTML = `<div><strong>${p.name}</strong></div>`;
+                div.innerHTML = `<strong>${p.name}</strong>`;
                 
                 if(p.alive && p.id !== socket.id) {
                     const btn = document.createElement('button');
                     if(data.state === 'night') {
-                        if(myRole==='Vampir') { btn.innerText="SALDIR"; btn.className="night-only"; btn.onclick=()=>socket.emit('nightAction',{targetId:p.id}); div.appendChild(btn); }
-                        if(myRole==='Doktor') { btn.innerText="KORU"; btn.onclick=()=>socket.emit('nightAction',{targetId:p.id}); div.appendChild(btn); }
-                        if(myRole==='Kahin') { btn.innerText="BAK"; btn.onclick=()=>socket.emit('nightAction',{targetId:p.id}); div.appendChild(btn); }
-                    } else {
-                        btn.innerText="OYLA"; btn.onclick=()=>socket.emit('castVote', p.id); div.appendChild(btn);
+                        if(myRole === 'Vampir') { btn.innerText="SALDIR"; btn.onclick=()=>socket.emit('nightAction',{targetId:p.id}); div.appendChild(btn); }
+                        if(myRole === 'Doktor') { btn.innerText="KORU"; btn.onclick=()=>socket.emit('nightAction',{targetId:p.id}); div.appendChild(btn); }
+                        if(myRole === 'Kahin') { btn.innerText="BAK"; btn.onclick=()=>socket.emit('nightAction',{targetId:p.id}); div.appendChild(btn); }
+                    } else if(data.state === 'day') {
+                        btn.innerText="OYLA";
+                        btn.onclick=()=> {
+                            socket.emit('castVote', p.id);
+                            btn.innerText = "OY VERİLDİ";
+                            btn.disabled = true;
+                        };
+                        div.appendChild(btn);
                     }
                 }
                 pList.appendChild(div);
@@ -135,19 +113,14 @@
 
         socket.on('receiveMessage', d => {
             const c = document.getElementById('chat');
-            c.innerHTML += `<div><b style="color:${d.color}">${d.name}:</b> ${d.text}</div>`;
+            c.innerHTML += `<div><b>${d.name}:</b> ${d.text}</div>`;
             c.scrollTop = c.scrollHeight;
         });
 
-        socket.on('announcement', m => {
-            const l = document.getElementById('log');
-            l.innerHTML += `<div>🔔 ${m}</div>`;
-            l.scrollTop = l.scrollHeight;
-        });
-
-        socket.on('timerUpdate', t => { document.getElementById('timer').innerText = t > 0 ? "⏳ " + t : ""; });
+        socket.on('timerUpdate', t => { document.getElementById('timer').innerText = t > 0 ? t : ""; });
+        socket.on('announcement', m => alert(m));
         socket.on('gameOver', d => alert("OYUN BİTTİ: " + d.winner));
-        socket.on('reload', () => location.reload());
+        socket.on('reload', () => location.reload()); // Admin reset atınca herkesi yeniler
         document.getElementById('chatInp').addEventListener('keypress', e => { if(e.key === 'Enter') sendMsg(); });
     </script>
 </body>
