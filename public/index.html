@@ -2,61 +2,108 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Vampir Köylü 2D: Voice</title>
+    <title>Vampir Köylü 3D: Pro Edition</title>
     <style>
-        body { background: #1a1c2c; color: white; font-family: 'Segoe UI', sans-serif; transition: 1.5s; text-align: center; margin: 0; }
-        .night-mode { background: #070914; }
-        #container { max-width: 500px; margin: auto; padding: 20px; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         
-        /* 2D Kart Tasarımı Geri Geldi */
-        .player-card {
-            background: #2f357d; border-radius: 12px; padding: 15px; margin: 10px 0;
-            display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3); animation: slideIn 0.4s;
+        /* Arayüz Katmanı */
+        #ui-layer { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            pointer-events: none; z-index: 10; display: flex; flex-direction: column; align-items: center; 
         }
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
         
-        .dead { filter: grayscale(1) opacity(0.5); border: 2px solid #ff4b5c; }
+        .hud-top { 
+            pointer-events: auto; background: rgba(0,0,0,0.8); color: white; 
+            padding: 15px 30px; border-radius: 0 0 20px 20px; text-align: center;
+            border: 1px solid #4ecca3; border-top: none;
+        }
+
+        #setup { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            pointer-events: auto; background: #1a1c2c; padding: 30px; border-radius: 20px;
+            box-shadow: 0 0 20px rgba(78, 204, 163, 0.5); text-align: center;
+        }
+
+        .player-actions-container {
+            position: absolute; bottom: 30px; width: 90%; display: flex; 
+            justify-content: center; gap: 10px; overflow-x: auto; pointer-events: auto;
+        }
+
+        .action-card {
+            background: rgba(47, 53, 125, 0.9); padding: 10px; border-radius: 10px;
+            min-width: 120px; text-align: center; border: 2px solid #4a90e2; color: white;
+        }
+
+        button { 
+            padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; 
+            font-weight: bold; transition: 0.3s; margin-top: 5px;
+        }
+        .btn-join { background: #4ecca3; color: #1a1c2c; }
+        .btn-kill { background: #ff4b5c; color: white; }
+        .btn-heal { background: #00d2ff; color: white; }
+        .btn-vote { background: #f9d423; color: #333; }
         
-        button { border: none; padding: 10px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-action { background: #ff4b5c; color: white; }
-        .btn-vote { background: #f9d423; color: #1a1c2c; }
-        .btn-mic { background: #4ecca3; margin-bottom: 10px; width: 100%; font-size: 1.1rem; }
-        
-        #status-bar { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px dashed #4ecca3; }
-        #role-tag { font-size: 1.4rem; font-weight: bold; margin-bottom: 10px; display: block; }
+        .dead-label { color: #ff4b5c; font-size: 0.8rem; font-weight: bold; }
     </style>
 </head>
-<body id="bg">
-    <div id="container">
-        <h1>🧛‍♂️ Vampir Köylü 2D</h1>
-        
+<body>
+
+    <div id="ui-layer">
         <div id="setup">
-            <input type="text" id="nameInp" placeholder="Adın ne?" style="padding: 10px; border-radius: 5px;">
-            <button style="background:#4ecca3" onclick="join()">Katıl</button>
+            <h1 style="color:#4ecca3">Vampir Köylü 3D</h1>
+            <input type="text" id="nameInp" placeholder="Adını yaz..." style="padding: 10px; margin-bottom: 10px; width: 80%;">
+            <br>
+            <button class="btn-join" onclick="join()">OYUNA KATIL</button>
+        </div>
+        
+        <div id="game-info" style="display:none;" class="hud-top">
+            <div id="role-text" style="font-size: 1.2rem; font-weight: bold;">Rolün Belirleniyor...</div>
+            <div id="status-text" style="color: #bbb; margin-top: 5px;">Lobi bekleniyor...</div>
+            <button id="start-btn" class="btn-join" style="margin-top:10px;" onclick="start()">OYUNU BAŞLAT</button>
         </div>
 
-        <div id="game-ui" style="display:none;">
-            <button class="btn-mic" onclick="toggleMic()" id="mic-btn">🎤 Mikrofonu Aç</button>
-            <span id="role-tag"></span>
-            <div id="status-bar">Lobi bekleniyor...</div>
-            <div id="player-list"></div>
-            <br>
-            <button id="start-btn" style="background:#4ecca3; width:100%" onclick="start()">Oyunu Başlat</button>
-        </div>
+        <div id="player-actions" class="player-actions-container"></div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+
     <script>
+        let scene, camera, renderer, players3D = {};
         const socket = io();
         let myRole = "";
+        let currentGameState = "";
 
-        async function toggleMic() {
-            try {
-                await navigator.mediaDevices.getUserMedia({ audio: true });
-                document.getElementById('mic-btn').innerText = "🎤 Mikrofon Açık";
-                document.getElementById('mic-btn').style.background = "#00d2ff";
-            } catch (e) { alert("Mikrofon izni gerekli!"); }
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Masa
+            const tableGeo = new THREE.CylinderGeometry(5, 5, 0.5, 32);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+            const table = new THREE.Mesh(tableGeo, tableMat);
+            scene.add(table);
+
+            // Işıklar
+            const ambient = new THREE.AmbientLight(0x404040, 2);
+            scene.add(ambient);
+            const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+            pointLight.position.set(0, 5, 0);
+            scene.add(pointLight);
+
+            camera.position.set(0, 8, 10);
+            camera.lookAt(0, 0, 0);
+
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
         }
 
         function join() {
@@ -64,7 +111,8 @@
             if(n) {
                 socket.emit('joinGame', n);
                 document.getElementById('setup').style.display = 'none';
-                document.getElementById('game-ui').style.display = 'block';
+                document.getElementById('game-info').style.display = 'block';
+                init3D();
             }
         }
 
@@ -72,50 +120,81 @@
 
         socket.on('assignRole', (role) => {
             myRole = role;
-            const tag = document.getElementById('role-tag');
-            tag.innerText = "ROLÜN: " + role;
-            tag.style.color = role === 'Vampir' ? '#ff4b5c' : '#4ecca3';
+            const rt = document.getElementById('role-text');
+            rt.innerText = "ROLÜN: " + role;
+            rt.style.color = role === 'Vampir' ? '#ff4b5c' : (role === 'Doktor' ? '#00d2ff' : '#4ecca3');
             document.getElementById('start-btn').style.display = 'none';
         });
 
         socket.on('gameUpdate', (data) => {
-            document.getElementById('bg').className = data.state === 'night' ? 'night-mode' : '';
-            document.getElementById('status-bar').innerText = data.message;
-            const list = document.getElementById('player-list');
-            list.innerHTML = "";
+            currentGameState = data.state;
+            document.getElementById('status-text').innerText = data.message;
+            
+            // Gece/Gündüz Işıklandırması
+            if(data.state === "night") scene.background = new THREE.Color(0x000005);
+            else scene.background = new THREE.Color(0x0a0a0a);
 
-            data.players.forEach(p => {
+            updateHUD(data.players);
+            update3DPlayers(data.players);
+        });
+
+        function update3DPlayers(players) {
+            players.forEach((p, i) => {
+                if(!players3D[p.id]) {
+                    const geo = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
+                    const mat = new THREE.MeshStandardMaterial({ color: 0x4a90e2 });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    const angle = (i / players.length) * Math.PI * 2;
+                    mesh.position.set(Math.cos(angle) * 4, 1, Math.sin(angle) * 4);
+                    scene.add(mesh);
+                    players3D[p.id] = mesh;
+                }
+                // Ölenleri yatır
+                if(!p.alive) players3D[p.id].rotation.z = Math.PI / 2;
+            });
+        }
+
+        function updateHUD(players) {
+            const container = document.getElementById('player-actions');
+            container.innerHTML = "";
+
+            players.forEach(p => {
                 const card = document.createElement('div');
-                card.className = `player-card ${p.alive ? '' : 'dead'}`;
-                card.innerHTML = `<span>${p.name} ${p.alive ? '👤' : '💀'}</span>`;
+                card.className = "action-card";
+                card.innerHTML = `<div>${p.name}</div>`;
                 
-                if (p.alive && p.id !== socket.id) {
+                if (!p.alive) {
+                    card.innerHTML += `<div class="dead-label">ÖLDÜ</div>`;
+                } else if (p.id !== socket.id) {
                     const btn = document.createElement('button');
-                    if (data.state === "night" && myRole === "Vampir") {
-                        btn.innerText = "Saldır"; btn.className = "btn-action";
+                    if (currentGameState === "night" && myRole === "Vampir") {
+                        btn.innerText = "SALDIR"; btn.className = "btn-kill";
                         btn.onclick = () => socket.emit('vampireAction', p.id);
                         card.appendChild(btn);
-                    } else if (data.state === "night" && myRole === "Doktor") {
-                        btn.innerText = "Koru"; btn.className = "btn-action";
-                        btn.style.background = "#00d2ff";
+                    } else if (currentGameState === "night" && myRole === "Doktor") {
+                        btn.innerText = "KORU"; btn.className = "btn-heal";
                         btn.onclick = () => socket.emit('doctorAction', p.id);
                         card.appendChild(btn);
-                    } else if (data.state === "day") {
-                        btn.innerText = "Oyla"; btn.className = "btn-vote";
+                    } else if (currentGameState === "day") {
+                        btn.innerText = "OYLA"; btn.className = "btn-vote";
                         btn.onclick = () => socket.emit('castVote', p.id);
                         card.appendChild(btn);
                     }
                 }
-                list.appendChild(card);
+                container.appendChild(card);
             });
-        });
+        }
 
         socket.on('announcement', (m) => alert(m));
+        
         socket.on('updatePlayerList', (players) => {
-            if(!myRole) {
-                document.getElementById('player-list').innerHTML = players.map(p => 
-                    `<div class="player-card"><span>${p.name} 👤</span></div>`).join('');
-            }
+            if(currentGameState === "") updateHUD(players);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
 </body>
