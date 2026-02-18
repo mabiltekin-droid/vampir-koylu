@@ -12,6 +12,7 @@ let players = [];
 let gameState = "waiting"; 
 let votes = {}; 
 let protectedId = null; 
+let timerInterval = null;
 
 io.on('connection', (socket) => {
     socket.on('joinGame', (username) => {
@@ -21,33 +22,34 @@ io.on('connection', (socket) => {
         io.emit('updatePlayerList', players);
     });
 
-    // Chat Sistemi
-    socket.on('sendMessage', (msg) => {
+    socket.on('sendMessage', (data) => {
         const player = players.find(p => p.id === socket.id);
-        if (player) {
-            io.emit('receiveMessage', { name: player.name, text: msg });
+        if (!player) return;
+
+        if (data.type === 'vampire') {
+            if (player.role === 'Vampir' && gameState === 'night') {
+                const vamps = players.filter(p => p.role === 'Vampir').map(p => p.id);
+                vamps.forEach(vId => io.to(vId).emit('receiveMessage', { name: `[VAMPİR] ${player.name}`, text: data.text, color: '#ff4b5c' }));
+            }
+        } else {
+            io.emit('receiveMessage', { name: player.name, text: data.text });
         }
     });
 
     socket.on('startGame', () => {
-        if (players.length < 4) return; // Kahin dahil olunca en az 4 kişi önerilir
+        if (players.length < 3) return; 
         let pool = [...players];
-        
-        // Rol Dağıtımı
         const vIndex = Math.floor(Math.random() * pool.length);
         const vampire = pool.splice(vIndex, 1)[0];
         
-        const sIndex = Math.floor(Math.random() * pool.length);
-        const seer = pool.splice(sIndex, 1)[0];
-        
-        const dIndex = Math.floor(Math.random() * pool.length);
-        const doctor = pool.splice(dIndex, 1)[0];
+        let seer = pool.length > 0 ? pool.splice(Math.floor(Math.random() * pool.length), 1)[0] : null;
+        let doctor = pool.length > 0 ? pool.splice(Math.floor(Math.random() * pool.length), 1)[0] : null;
 
         players.forEach(p => {
             p.alive = true;
             if (p.id === vampire.id) p.role = 'Vampir';
-            else if (p.id === seer.id) p.role = 'Kahin';
-            else if (p.id === doctor.id) p.role = 'Doktor';
+            else if (seer && p.id === seer.id) p.role = 'Kahin';
+            else if (doctor && p.id === doctor.id) p.role = 'Doktor';
             else p.role = 'Köylü';
             io.to(p.id).emit('assignRole', p.role);
         });
@@ -58,50 +60,49 @@ io.on('connection', (socket) => {
         gameState = "night";
         votes = {};
         protectedId = null;
-        io.emit('gameUpdate', { state: "night", message: "🌙 Gece oldu. Kurtlar uluyor...", players });
-        io.emit('playSound', 'night');
+        io.emit('gameUpdate', { state: "night", message: "🌙 Gece oldu. Vampirler avda...", players });
     }
 
     socket.on('vampireAction', (targetId) => {
         if (gameState !== "night") return;
-        let killNews = "";
-        if (targetId === protectedId) {
-            killNews = "🏥 Doktor müdahale etti, kimse ölmedi!";
-        } else {
-            const victim = players.find(p => p.id === targetId);
-            if (victim) { victim.alive = false; killNews = `💀 ${victim.name} dün gece kurban edildi.`; }
-        }
-        startDay(killNews);
+        let victim = players.find(p => p.id === targetId);
+        let news = victim && targetId !== protectedId ? `💀 ${victim.name} öldü.` : "🏥 Kimse ölmedi.";
+        if (victim && targetId !== protectedId) victim.alive = false;
+        startDay(news);
     });
 
-    socket.on('doctorAction', (targetId) => {
-        if (gameState !== "night") return;
-        protectedId = targetId;
-        socket.emit('announcement', "🛡️ Bu oyuncuyu koruyorsun.");
-    });
-
-    // Kahin Aksiyonu
+    socket.on('doctorAction', (targetId) => { protectedId = targetId; socket.emit('announcement', "🛡️ Korunuyor."); });
     socket.on('seerAction', (targetId) => {
-        if (gameState !== "night") return;
-        const target = players.find(p => p.id === targetId);
-        if (target) {
-            socket.emit('announcement', `🔮 Görü: ${target.name} bir ${target.role}!`);
-        }
+        const t = players.find(p => p.id === targetId);
+        if (t) socket.emit('announcement', `🔮 ${t.name} bir ${t.role}!`);
     });
 
     function startDay(news) {
         if (checkGameOver()) return;
         gameState = "day";
         votes = {};
-        io.emit('gameUpdate', { state: "day", message: `☀️ ${news} Oylama vakti!`, players });
-        io.emit('playSound', 'day');
+        io.emit('gameUpdate', { state: "day", message: `☀️ ${news} Oylama başladı!`, players });
+        
+        let timeLeft = 60;
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            io.emit('timerUpdate', timeLeft);
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                tallyVotes();
+            }
+        }, 1000);
     }
 
     socket.on('castVote', (targetId) => {
         if (gameState === "day") {
             votes[socket.id] = targetId;
             const aliveCount = players.filter(p => p.alive).length;
-            if (Object.keys(votes).length >= aliveCount) tallyVotes();
+            if (Object.keys(votes).length >= aliveCount) {
+                clearInterval(timerInterval);
+                tallyVotes();
+            }
         }
     });
 
@@ -110,34 +111,23 @@ io.on('connection', (socket) => {
         Object.values(votes).forEach(id => counts[id] = (counts[id] || 0) + 1);
         let lynchedId = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b, null);
         const victim = players.find(p => p.id === lynchedId);
-        if (victim) { victim.alive = false; io.emit('announcement', `📢 Köy ${victim.name}'i asmaya karar verdi!`); }
+        if (victim) {
+            victim.alive = false;
+            io.emit('announcement', `📢 ${victim.name} asıldı!`);
+            io.emit('deathEffect', victim.id);
+        }
         if (!checkGameOver()) setTimeout(startNight, 3000);
     }
 
     function checkGameOver() {
         const vamps = players.filter(p => p.role === 'Vampir' && p.alive);
         const citizens = players.filter(p => p.role !== 'Vampir' && p.alive);
-        let winner = "";
-        if (vamps.length === 0) winner = "KÖYLÜLER KAZANDI! 🏆";
-        else if (vamps.length >= citizens.length) winner = "VAMPİRLER KAZANDI! 🧛";
-
-        if (winner !== "") {
-            io.emit('gameOver', { winner: winner });
-            setTimeout(() => {
-                gameState = "waiting";
-                players.forEach(p => { p.role = null; p.alive = true; });
-                io.emit('returnToLobby', players);
-            }, 6000);
-            return true;
-        }
+        let winner = vamps.length === 0 ? "KÖYLÜLER KAZANDI! 🏆" : (vamps.length >= citizens.length ? "VAMPİRLER KAZANDI! 🧛" : "");
+        if (winner) { io.emit('gameOver', { winner }); setTimeout(() => { players.forEach(p => {p.role=null; p.alive=true;}); io.emit('returnToLobby'); }, 6000); return true; }
         return false;
     }
 
-    socket.on('disconnect', () => {
-        players = players.filter(p => p.id !== socket.id);
-        io.emit('updatePlayerList', players);
-    });
+    socket.on('disconnect', () => { players = players.filter(p => p.id !== socket.id); io.emit('updatePlayerList', players); });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Server aktif: ${PORT}`));
+server.listen(3000, '0.0.0.0', () => console.log('3D Server Ready'));

@@ -2,27 +2,32 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Vampir Köylü 3D: Ultimate Edition</title>
+    <title>Vampir Köylü 3D: Pro Max</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; color: white; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         
-        /* Chat Kutusu */
-        #chat-container { position: absolute; left: 20px; bottom: 150px; width: 250px; height: 200px; background: rgba(0,0,0,0.6); pointer-events: auto; border-radius: 10px; display: flex; flex-direction: column; border: 1px solid #4a90e2; }
-        #chat-messages { flex: 1; overflow-y: auto; padding: 5px; font-size: 0.8rem; }
-        #chat-input { background: #222; border: none; color: white; padding: 8px; border-radius: 0 0 10px 10px; }
+        /* HUDs */
+        .hud { pointer-events: auto; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 1px solid #4ecca3; }
+        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+        #top-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; min-width: 300px; }
+        
+        /* Chat */
+        #chat-area { position: absolute; left: 20px; bottom: 150px; width: 280px; height: 200px; display: flex; flex-direction: column; }
+        #messages { flex: 1; overflow-y: auto; background: rgba(0,0,0,0.5); padding: 5px; font-size: 0.8rem; border-radius: 5px; }
+        #chat-input { background: #222; border: 1px solid #4a90e2; color: white; padding: 10px; }
 
-        /* HUD ve Butonlar */
-        .hud-top { align-self: center; pointer-events: auto; background: rgba(0,0,0,0.8); padding: 10px 30px; border-radius: 0 0 20px 20px; text-align: center; border: 1px solid #4ecca3; }
-        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; background: #1a1c2c; padding: 40px; border-radius: 20px; box-shadow: 0 0 30px rgba(78, 204, 163, 0.4); text-align: center; }
-        .player-actions-container { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 10px; pointer-events: auto; }
-        .action-card { background: rgba(30, 30, 60, 0.9); padding: 10px; border-radius: 12px; min-width: 100px; text-align: center; border: 1px solid #4a90e2; }
+        /* Timer */
+        #timer { font-size: 2rem; color: #f9d423; font-weight: bold; }
+
+        /* Floating Names (İsim Etiketleri) */
+        .player-label { color: white; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; }
+
+        .player-actions { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 10px; pointer-events: auto; }
+        .action-card { background: rgba(30, 30, 60, 0.9); padding: 10px; border-radius: 10px; text-align: center; border: 1px solid #4a90e2; }
         
-        button { padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; transition: 0.2s; margin-top: 5px; }
-        .btn-vampire { background: #ff4b5c; color: white; }
-        .btn-doctor { background: #00d2ff; color: white; }
-        .btn-seer { background: #a29bfe; color: white; }
-        .btn-vote { background: #f9d423; color: #333; }
+        button { padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; }
+        #vampire-chat-toggle { background: #ff4b5c; margin-top: 5px; display: none; }
 
         #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; }
     </style>
@@ -30,30 +35,30 @@
 <body>
 
     <div id="ui-layer">
-        <div id="setup">
+        <div id="setup" class="hud">
             <h1 style="color:#4ecca3">Vampir Köylü 3D</h1>
-            <p>En az 4 oyuncu gereklidir.</p>
-            <input type="text" id="nameInp" placeholder="Adını yaz..." style="padding: 10px; width: 80%; border-radius: 5px; border:none;">
-            <br><br>
-            <button style="background:#4ecca3; font-size: 1.2rem;" onclick="join()">BAŞLA</button>
-        </div>
-        
-        <div id="game-info" style="display:none;" class="hud-top">
-            <div id="role-text" style="font-size: 1.2rem;"></div>
-            <div id="status-text" style="color: #4ecca3;"></div>
-            <button id="start-btn" style="background:#4ecca3" onclick="start()">OYUNU BAŞLAT</button>
+            <input type="text" id="nameInp" placeholder="Adın..." style="padding:10px; width:200px;">
+            <button onclick="join()" style="background:#4ecca3">KATIL</button>
         </div>
 
-        <div id="chat-container" style="display:none;">
-            <div id="chat-messages"></div>
-            <input type="text" id="chat-input" placeholder="Mesaj yaz (Enter)...">
+        <div id="top-bar" class="hud" style="display:none;">
+            <div id="timer">00</div>
+            <div id="role-text" style="font-weight:bold;"></div>
+            <div id="status-text">Lobi...</div>
+            <button id="start-btn" onclick="start()">OYUNU BAŞLAT</button>
         </div>
 
-        <div id="player-actions" class="player-actions-container"></div>
+        <div id="chat-area" class="hud" style="display:none;">
+            <div id="messages"></div>
+            <input type="text" id="chat-input" placeholder="Mesaj (Enter)...">
+            <button id="vampire-chat-toggle" onclick="toggleVampireChat()">Vampir Chat: KAPALI</button>
+        </div>
+
+        <div id="player-actions" class="player-actions"></div>
     </div>
 
     <div id="game-over-screen">
-        <h1 id="winner-text" style="font-size: 3.5rem;"></h1>
+        <h1 id="winner-text"></h1>
         <p>Lobiye dönülüyor...</p>
     </div>
 
@@ -61,86 +66,90 @@
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
-        let scene, camera, renderer, players3D = {};
+        let scene, camera, renderer, players3D = {}, labels = [];
         const socket = io();
-        let myRole = "";
-        let myId = "";
-        let currentGameState = "";
-
-        // SESLER (Açık kaynak linkler)
-        const sounds = {
-            night: new Audio('https://assets.mixkit.co/active_storage/sfx/2153/2153-preview.mp3'), // Kurt/Gece
-            day: new Audio('https://assets.mixkit.co/active_storage/sfx/1005/1005-preview.mp3'),   // Kuşlar
-            vote: new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3')   // Tokmak
-        };
+        let myRole = "", isVampireChat = false;
 
         function init3D() {
-            if(renderer) return;
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            scene.background = new THREE.Color(0x050505);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
-            
-            // Masa ve Ortam
-            const table = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 0.4, 32), new THREE.MeshStandardMaterial({ color: 0x1a1a1a }));
+
+            const table = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 0.5, 32), new THREE.MeshStandardMaterial({ color: 0x222 }));
             scene.add(table);
             scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-            const light = new THREE.PointLight(0xffffff, 1, 50);
-            light.position.set(0, 10, 0);
-            scene.add(light);
-            
-            camera.position.set(0, 8, 12);
+            const pLight = new THREE.PointLight(0xffffff, 1, 50);
+            pLight.position.set(0, 5, 0);
+            scene.add(pLight);
+
+            camera.position.set(0, 7, 10);
             camera.lookAt(0, 0, 0);
             animate();
         }
 
-        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+            updateLabels();
+        }
+
+        // İsim Etiketlerini Güncelle
+        function updateLabels() {
+            labels.forEach(l => {
+                const vector = l.pos.clone().project(camera);
+                const x = (vector.x * .5 + .5) * window.innerWidth;
+                const y = (-(vector.y * .5) + .5) * window.innerHeight;
+                l.el.style.transform = `translate(-50%, -50%) translate(${x}px,${y}px)`;
+            });
+        }
 
         function join() {
             const n = document.getElementById('nameInp').value;
             if(n) {
                 socket.emit('joinGame', n);
                 document.getElementById('setup').style.display = 'none';
-                document.getElementById('game-info').style.display = 'block';
-                document.getElementById('chat-container').style.display = 'flex';
+                document.getElementById('top-bar').style.display = 'block';
+                document.getElementById('chat-area').style.display = 'flex';
                 init3D();
             }
         }
 
         function start() { socket.emit('startGame'); }
 
-        // CHAT
+        function toggleVampireChat() {
+            isVampireChat = !isVampireChat;
+            document.getElementById('vampire-chat-toggle').innerText = isVampireChat ? "Vampir Chat: AÇIK" : "Vampir Chat: KAPALI";
+        }
+
         document.getElementById('chat-input').addEventListener('keypress', (e) => {
             if(e.key === 'Enter' && e.target.value) {
-                socket.emit('sendMessage', e.target.value);
+                socket.emit('sendMessage', { text: e.target.value, type: isVampireChat ? 'vampire' : 'global' });
                 e.target.value = '';
             }
         });
 
-        socket.on('receiveMessage', (data) => {
-            const m = document.getElementById('chat-messages');
-            m.innerHTML += `<div><b>${data.name}:</b> ${data.text}</div>`;
-            m.scrollTop = m.scrollHeight;
-        });
-
-        socket.on('playSound', (type) => { if(sounds[type]) sounds[type].play(); });
-
         socket.on('assignRole', (role) => {
             myRole = role;
-            myId = socket.id;
-            const rt = document.getElementById('role-text');
-            rt.innerText = "ROLÜN: " + role;
-            rt.style.color = role === 'Vampir' ? '#ff4b5c' : '#4ecca3';
+            document.getElementById('role-text').innerText = "ROLÜN: " + role;
+            if(role === 'Vampir') document.getElementById('vampire-chat-toggle').style.display = 'block';
             document.getElementById('start-btn').style.display = 'none';
         });
 
         socket.on('gameUpdate', (data) => {
-            currentGameState = data.state;
             document.getElementById('status-text').innerText = data.message;
-            scene.background = new THREE.Color(data.state === "night" ? 0x000000 : 0x050510);
-            updateHUD(data.players);
+            // Dinamik Kamera Hareketi
+            if(data.state === 'night') {
+                camera.position.set(0, 12, 0); // Kuş Bakışı
+                camera.lookAt(0,0,0);
+            } else {
+                camera.position.set(0, 7, 10); // Tartışma Açısı
+                camera.lookAt(0,0,0);
+            }
             update3DPlayers(data.players);
+            updateHUD(data.players, data.state);
         });
 
         function update3DPlayers(players) {
@@ -148,52 +157,53 @@
                 if(!players3D[p.id]) {
                     const char = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8, 4, 8), new THREE.MeshStandardMaterial({ color: 0x4a90e2 }));
                     const angle = (i / players.length) * Math.PI * 2;
-                    char.position.set(Math.cos(angle) * 4, 0.8, Math.sin(angle) * 4);
+                    const x = Math.cos(angle)*4, z = Math.sin(angle)*4;
+                    char.position.set(x, 0.8, z);
                     scene.add(char);
                     players3D[p.id] = char;
+
+                    // İsim Etiketi Oluştur
+                    const el = document.createElement('div');
+                    el.className = 'player-label';
+                    el.innerText = p.name;
+                    document.body.appendChild(el);
+                    labels.push({ el, pos: new THREE.Vector3(x, 2, z) });
                 }
-                // Gece Görüşü: Vampirsen diğer vampiri (eğer varsa) kırmızı gör.
-                // Tek vampirde sadece kendini ve ölenleri kontrol et.
-                if(!p.alive) {
-                    players3D[p.id].rotation.z = Math.PI/2;
-                    players3D[p.id].material.color.set(0x333333);
-                } else if(myRole === 'Vampir' && p.role === 'Vampir') {
-                    players3D[p.id].material.color.set(0xff0000);
-                }
+                if(!p.alive) players3D[p.id].rotation.z = Math.PI/2;
             });
         }
 
-        function updateHUD(players) {
+        function updateHUD(players, state) {
             const container = document.getElementById('player-actions');
             container.innerHTML = "";
             players.forEach(p => {
-                const card = document.createElement('div');
-                card.className = "action-card";
-                card.innerHTML = `<div>${p.name}</div>`;
-                
-                if (p.alive && p.id !== socket.id) {
+                if(p.alive && p.id !== socket.id) {
+                    const card = document.createElement('div');
+                    card.className = "action-card";
+                    card.innerHTML = `<div>${p.name}</div>`;
                     const btn = document.createElement('button');
-                    if (currentGameState === "night") {
-                        if(myRole === 'Vampir') { btn.innerText = "SALDIR"; btn.className = "btn-vampire"; btn.onclick = () => socket.emit('vampireAction', p.id); card.appendChild(btn); }
-                        else if(myRole === 'Doktor') { btn.innerText = "KORU"; btn.className = "btn-doctor"; btn.onclick = () => socket.emit('doctorAction', p.id); card.appendChild(btn); }
-                        else if(myRole === 'Kahin') { btn.innerText = "GÖRÜ"; btn.className = "btn-seer"; btn.onclick = () => socket.emit('seerAction', p.id); card.appendChild(btn); }
-                    } else if (currentGameState === "day") {
-                        btn.innerText = "OYLA"; btn.className = "btn-vote"; btn.onclick = () => { socket.emit('castVote', p.id); sounds.vote.play(); }; card.appendChild(btn);
+                    if(state === 'night') {
+                        if(myRole==='Vampir'){ btn.innerText="SALDIR"; btn.onclick=()=>socket.emit('vampireAction', p.id); card.appendChild(btn); }
+                        if(myRole==='Doktor'){ btn.innerText="KORU"; btn.onclick=()=>socket.emit('doctorAction', p.id); card.appendChild(btn); }
+                        if(myRole==='Kahin'){ btn.innerText="GÖRÜ"; btn.onclick=()=>socket.emit('seerAction', p.id); card.appendChild(btn); }
+                    } else if(state === 'day') {
+                        btn.innerText="OYLA"; btn.onclick=()=>socket.emit('castVote', p.id); card.appendChild(btn);
                     }
+                    container.appendChild(card);
                 }
-                container.appendChild(card);
             });
         }
 
-        socket.on('gameOver', (data) => {
-            document.getElementById('game-over-screen').style.display = 'flex';
-            document.getElementById('winner-text').innerText = data.winner;
+        socket.on('receiveMessage', (d) => {
+            const m = document.getElementById('messages');
+            m.innerHTML += `<div style="color:${d.color || 'white'}"><b>${d.name}:</b> ${d.text}</div>`;
+            m.scrollTop = m.scrollHeight;
         });
 
-        socket.on('returnToLobby', () => location.reload()); // En temiz sıfırlama
+        socket.on('timerUpdate', (t) => { document.getElementById('timer').innerText = t; });
+        socket.on('gameOver', (d) => { document.getElementById('game-over-screen').style.display='flex'; document.getElementById('winner-text').innerText=d.winner; });
+        socket.on('returnToLobby', () => location.reload());
         socket.on('announcement', (m) => alert(m));
-        socket.on('updatePlayerList', (players) => { if(currentGameState === "") updateHUD(players); });
-        window.addEventListener('resize', () => { if(renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }});
     </script>
 </body>
 </html>
