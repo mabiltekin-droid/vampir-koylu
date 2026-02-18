@@ -2,21 +2,29 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Vampir Köylü 3D: Pro</title>
+    <title>Vampir Köylü 3D: Ultimate Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; align-items: center; }
-        .hud-top { pointer-events: auto; background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 0 0 20px 20px; text-align: center; border: 1px solid #4ecca3; border-top: none; }
-        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; background: #1a1c2c; padding: 30px; border-radius: 20px; box-shadow: 0 0 20px rgba(78, 204, 163, 0.5); text-align: center; }
-        .player-actions-container { position: absolute; bottom: 30px; width: 90%; display: flex; justify-content: center; gap: 10px; overflow-x: auto; pointer-events: auto; }
-        .action-card { background: rgba(47, 53, 125, 0.9); padding: 10px; border-radius: 10px; min-width: 120px; text-align: center; border: 2px solid #4a90e2; color: white; }
-        button { padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; transition: 0.3s; margin-top: 5px; }
-        .btn-join { background: #4ecca3; color: #1a1c2c; }
-        .btn-kill { background: #ff4b5c; color: white; }
-        .btn-heal { background: #00d2ff; color: white; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; color: white; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; }
+        
+        /* Chat Kutusu */
+        #chat-container { position: absolute; left: 20px; bottom: 150px; width: 250px; height: 200px; background: rgba(0,0,0,0.6); pointer-events: auto; border-radius: 10px; display: flex; flex-direction: column; border: 1px solid #4a90e2; }
+        #chat-messages { flex: 1; overflow-y: auto; padding: 5px; font-size: 0.8rem; }
+        #chat-input { background: #222; border: none; color: white; padding: 8px; border-radius: 0 0 10px 10px; }
+
+        /* HUD ve Butonlar */
+        .hud-top { align-self: center; pointer-events: auto; background: rgba(0,0,0,0.8); padding: 10px 30px; border-radius: 0 0 20px 20px; text-align: center; border: 1px solid #4ecca3; }
+        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; background: #1a1c2c; padding: 40px; border-radius: 20px; box-shadow: 0 0 30px rgba(78, 204, 163, 0.4); text-align: center; }
+        .player-actions-container { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 10px; pointer-events: auto; }
+        .action-card { background: rgba(30, 30, 60, 0.9); padding: 10px; border-radius: 12px; min-width: 100px; text-align: center; border: 1px solid #4a90e2; }
+        
+        button { padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; transition: 0.2s; margin-top: 5px; }
+        .btn-vampire { background: #ff4b5c; color: white; }
+        .btn-doctor { background: #00d2ff; color: white; }
+        .btn-seer { background: #a29bfe; color: white; }
         .btn-vote { background: #f9d423; color: #333; }
-        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; color: white; pointer-events: auto; }
-        #winner-text { font-size: 3rem; color: #f9d423; text-shadow: 0 0 20px #f9d423; margin: 0; }
+
+        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; }
     </style>
 </head>
 <body>
@@ -24,23 +32,29 @@
     <div id="ui-layer">
         <div id="setup">
             <h1 style="color:#4ecca3">Vampir Köylü 3D</h1>
-            <input type="text" id="nameInp" placeholder="Adını yaz..." style="padding: 10px; margin-bottom: 10px; width: 80%;">
-            <br>
-            <button class="btn-join" onclick="join()">OYUNA KATIL</button>
+            <p>En az 4 oyuncu gereklidir.</p>
+            <input type="text" id="nameInp" placeholder="Adını yaz..." style="padding: 10px; width: 80%; border-radius: 5px; border:none;">
+            <br><br>
+            <button style="background:#4ecca3; font-size: 1.2rem;" onclick="join()">BAŞLA</button>
         </div>
         
         <div id="game-info" style="display:none;" class="hud-top">
-            <div id="role-text" style="font-size: 1.2rem; font-weight: bold;">Rolün Belirleniyor...</div>
-            <div id="status-text" style="color: #bbb; margin-top: 5px;">Lobi bekleniyor...</div>
-            <button id="start-btn" class="btn-join" style="margin-top:10px;" onclick="start()">OYUNU BAŞLAT</button>
+            <div id="role-text" style="font-size: 1.2rem;"></div>
+            <div id="status-text" style="color: #4ecca3;"></div>
+            <button id="start-btn" style="background:#4ecca3" onclick="start()">OYUNU BAŞLAT</button>
+        </div>
+
+        <div id="chat-container" style="display:none;">
+            <div id="chat-messages"></div>
+            <input type="text" id="chat-input" placeholder="Mesaj yaz (Enter)...">
         </div>
 
         <div id="player-actions" class="player-actions-container"></div>
     </div>
 
     <div id="game-over-screen">
-        <h1 id="winner-text">KAZANAN</h1>
-        <p style="font-size: 1.2rem;">5 saniye içinde lobiye dönülüyor...</p>
+        <h1 id="winner-text" style="font-size: 3.5rem;"></h1>
+        <p>Lobiye dönülüyor...</p>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -50,33 +64,38 @@
         let scene, camera, renderer, players3D = {};
         const socket = io();
         let myRole = "";
+        let myId = "";
         let currentGameState = "";
+
+        // SESLER (Açık kaynak linkler)
+        const sounds = {
+            night: new Audio('https://assets.mixkit.co/active_storage/sfx/2153/2153-preview.mp3'), // Kurt/Gece
+            day: new Audio('https://assets.mixkit.co/active_storage/sfx/1005/1005-preview.mp3'),   // Kuşlar
+            vote: new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3')   // Tokmak
+        };
 
         function init3D() {
             if(renderer) return;
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a0a);
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
-            const tableGeo = new THREE.CylinderGeometry(5, 5, 0.5, 32);
-            const tableMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-            const table = new THREE.Mesh(tableGeo, tableMat);
+            
+            // Masa ve Ortam
+            const table = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 0.4, 32), new THREE.MeshStandardMaterial({ color: 0x1a1a1a }));
             scene.add(table);
-            scene.add(new THREE.AmbientLight(0x404040, 2));
-            const light = new THREE.PointLight(0xffffff, 1, 100);
-            light.position.set(0, 5, 0);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const light = new THREE.PointLight(0xffffff, 1, 50);
+            light.position.set(0, 10, 0);
             scene.add(light);
-            camera.position.set(0, 8, 10);
+            
+            camera.position.set(0, 8, 12);
             camera.lookAt(0, 0, 0);
             animate();
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
-        }
+        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
 
         function join() {
             const n = document.getElementById('nameInp').value;
@@ -84,24 +103,42 @@
                 socket.emit('joinGame', n);
                 document.getElementById('setup').style.display = 'none';
                 document.getElementById('game-info').style.display = 'block';
+                document.getElementById('chat-container').style.display = 'flex';
                 init3D();
             }
         }
 
         function start() { socket.emit('startGame'); }
 
+        // CHAT
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if(e.key === 'Enter' && e.target.value) {
+                socket.emit('sendMessage', e.target.value);
+                e.target.value = '';
+            }
+        });
+
+        socket.on('receiveMessage', (data) => {
+            const m = document.getElementById('chat-messages');
+            m.innerHTML += `<div><b>${data.name}:</b> ${data.text}</div>`;
+            m.scrollTop = m.scrollHeight;
+        });
+
+        socket.on('playSound', (type) => { if(sounds[type]) sounds[type].play(); });
+
         socket.on('assignRole', (role) => {
             myRole = role;
+            myId = socket.id;
             const rt = document.getElementById('role-text');
             rt.innerText = "ROLÜN: " + role;
-            rt.style.color = role === 'Vampir' ? '#ff4b5c' : (role === 'Doktor' ? '#00d2ff' : '#4ecca3');
+            rt.style.color = role === 'Vampir' ? '#ff4b5c' : '#4ecca3';
             document.getElementById('start-btn').style.display = 'none';
         });
 
         socket.on('gameUpdate', (data) => {
             currentGameState = data.state;
             document.getElementById('status-text').innerText = data.message;
-            scene.background = new THREE.Color(data.state === "night" ? 0x000005 : 0x0a0a0a);
+            scene.background = new THREE.Color(data.state === "night" ? 0x000000 : 0x050510);
             updateHUD(data.players);
             update3DPlayers(data.players);
         });
@@ -109,16 +146,20 @@
         function update3DPlayers(players) {
             players.forEach((p, i) => {
                 if(!players3D[p.id]) {
-                    const geo = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
-                    const mat = new THREE.MeshStandardMaterial({ color: 0x4a90e2 });
-                    const mesh = new THREE.Mesh(geo, mat);
+                    const char = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8, 4, 8), new THREE.MeshStandardMaterial({ color: 0x4a90e2 }));
                     const angle = (i / players.length) * Math.PI * 2;
-                    mesh.position.set(Math.cos(angle) * 4, 1, Math.sin(angle) * 4);
-                    scene.add(mesh);
-                    players3D[p.id] = mesh;
+                    char.position.set(Math.cos(angle) * 4, 0.8, Math.sin(angle) * 4);
+                    scene.add(char);
+                    players3D[p.id] = char;
                 }
-                if(!p.alive) players3D[p.id].rotation.z = Math.PI / 2;
-                else players3D[p.id].rotation.z = 0;
+                // Gece Görüşü: Vampirsen diğer vampiri (eğer varsa) kırmızı gör.
+                // Tek vampirde sadece kendini ve ölenleri kontrol et.
+                if(!p.alive) {
+                    players3D[p.id].rotation.z = Math.PI/2;
+                    players3D[p.id].material.color.set(0x333333);
+                } else if(myRole === 'Vampir' && p.role === 'Vampir') {
+                    players3D[p.id].material.color.set(0xff0000);
+                }
             });
         }
 
@@ -129,21 +170,15 @@
                 const card = document.createElement('div');
                 card.className = "action-card";
                 card.innerHTML = `<div>${p.name}</div>`;
-                if (!p.alive) card.innerHTML += `<div style="color:red">ÖLDÜ</div>`;
-                else if (p.id !== socket.id) {
+                
+                if (p.alive && p.id !== socket.id) {
                     const btn = document.createElement('button');
-                    if (currentGameState === "night" && myRole === "Vampir") {
-                        btn.innerText = "SALDIR"; btn.className = "btn-kill";
-                        btn.onclick = () => socket.emit('vampireAction', p.id);
-                        card.appendChild(btn);
-                    } else if (currentGameState === "night" && myRole === "Doktor") {
-                        btn.innerText = "KORU"; btn.className = "btn-heal";
-                        btn.onclick = () => socket.emit('doctorAction', p.id);
-                        card.appendChild(btn);
+                    if (currentGameState === "night") {
+                        if(myRole === 'Vampir') { btn.innerText = "SALDIR"; btn.className = "btn-vampire"; btn.onclick = () => socket.emit('vampireAction', p.id); card.appendChild(btn); }
+                        else if(myRole === 'Doktor') { btn.innerText = "KORU"; btn.className = "btn-doctor"; btn.onclick = () => socket.emit('doctorAction', p.id); card.appendChild(btn); }
+                        else if(myRole === 'Kahin') { btn.innerText = "GÖRÜ"; btn.className = "btn-seer"; btn.onclick = () => socket.emit('seerAction', p.id); card.appendChild(btn); }
                     } else if (currentGameState === "day") {
-                        btn.innerText = "OYLA"; btn.className = "btn-vote";
-                        btn.onclick = () => socket.emit('castVote', p.id);
-                        card.appendChild(btn);
+                        btn.innerText = "OYLA"; btn.className = "btn-vote"; btn.onclick = () => { socket.emit('castVote', p.id); sounds.vote.play(); }; card.appendChild(btn);
                     }
                 }
                 container.appendChild(card);
@@ -155,20 +190,10 @@
             document.getElementById('winner-text').innerText = data.winner;
         });
 
-        socket.on('returnToLobby', (updatedPlayers) => {
-            document.getElementById('game-over-screen').style.display = 'none';
-            myRole = ""; currentGameState = "";
-            document.getElementById('role-text').innerText = "Lobi Bekleniyor...";
-            document.getElementById('start-btn').style.display = 'inline-block';
-            for (let id in players3D) scene.remove(players3D[id]);
-            players3D = {};
-            updateHUD(updatedPlayers);
-            update3DPlayers(updatedPlayers);
-        });
-
+        socket.on('returnToLobby', () => location.reload()); // En temiz sıfırlama
         socket.on('announcement', (m) => alert(m));
         socket.on('updatePlayerList', (players) => { if(currentGameState === "") updateHUD(players); });
-        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        window.addEventListener('resize', () => { if(renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }});
     </script>
 </body>
 </html>

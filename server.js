@@ -21,17 +21,33 @@ io.on('connection', (socket) => {
         io.emit('updatePlayerList', players);
     });
 
+    // Chat Sistemi
+    socket.on('sendMessage', (msg) => {
+        const player = players.find(p => p.id === socket.id);
+        if (player) {
+            io.emit('receiveMessage', { name: player.name, text: msg });
+        }
+    });
+
     socket.on('startGame', () => {
-        if (players.length < 2) return; 
+        if (players.length < 4) return; // Kahin dahil olunca en az 4 kişi önerilir
         let pool = [...players];
+        
+        // Rol Dağıtımı
         const vIndex = Math.floor(Math.random() * pool.length);
         const vampire = pool.splice(vIndex, 1)[0];
-        let doctor = pool.length > 0 ? pool.splice(Math.floor(Math.random() * pool.length), 1)[0] : null;
+        
+        const sIndex = Math.floor(Math.random() * pool.length);
+        const seer = pool.splice(sIndex, 1)[0];
+        
+        const dIndex = Math.floor(Math.random() * pool.length);
+        const doctor = pool.splice(dIndex, 1)[0];
 
         players.forEach(p => {
             p.alive = true;
             if (p.id === vampire.id) p.role = 'Vampir';
-            else if (doctor && p.id === doctor.id) p.role = 'Doktor';
+            else if (p.id === seer.id) p.role = 'Kahin';
+            else if (p.id === doctor.id) p.role = 'Doktor';
             else p.role = 'Köylü';
             io.to(p.id).emit('assignRole', p.role);
         });
@@ -42,7 +58,8 @@ io.on('connection', (socket) => {
         gameState = "night";
         votes = {};
         protectedId = null;
-        io.emit('gameUpdate', { state: "night", message: "🌙 Gece oldu. Karanlık çöküyor...", players });
+        io.emit('gameUpdate', { state: "night", message: "🌙 Gece oldu. Kurtlar uluyor...", players });
+        io.emit('playSound', 'night');
     }
 
     socket.on('vampireAction', (targetId) => {
@@ -52,7 +69,7 @@ io.on('connection', (socket) => {
             killNews = "🏥 Doktor müdahale etti, kimse ölmedi!";
         } else {
             const victim = players.find(p => p.id === targetId);
-            if (victim) { victim.alive = false; killNews = `💀 ${victim.name} dün gece aramızdan ayrıldı.`; }
+            if (victim) { victim.alive = false; killNews = `💀 ${victim.name} dün gece kurban edildi.`; }
         }
         startDay(killNews);
     });
@@ -63,11 +80,21 @@ io.on('connection', (socket) => {
         socket.emit('announcement', "🛡️ Bu oyuncuyu koruyorsun.");
     });
 
+    // Kahin Aksiyonu
+    socket.on('seerAction', (targetId) => {
+        if (gameState !== "night") return;
+        const target = players.find(p => p.id === targetId);
+        if (target) {
+            socket.emit('announcement', `🔮 Görü: ${target.name} bir ${target.role}!`);
+        }
+    });
+
     function startDay(news) {
         if (checkGameOver()) return;
         gameState = "day";
         votes = {};
         io.emit('gameUpdate', { state: "day", message: `☀️ ${news} Oylama vakti!`, players });
+        io.emit('playSound', 'day');
     }
 
     socket.on('castVote', (targetId) => {
@@ -90,7 +117,6 @@ io.on('connection', (socket) => {
     function checkGameOver() {
         const vamps = players.filter(p => p.role === 'Vampir' && p.alive);
         const citizens = players.filter(p => p.role !== 'Vampir' && p.alive);
-
         let winner = "";
         if (vamps.length === 0) winner = "KÖYLÜLER KAZANDI! 🏆";
         else if (vamps.length >= citizens.length) winner = "VAMPİRLER KAZANDI! 🧛";
@@ -101,7 +127,7 @@ io.on('connection', (socket) => {
                 gameState = "waiting";
                 players.forEach(p => { p.role = null; p.alive = true; });
                 io.emit('returnToLobby', players);
-            }, 5000);
+            }, 6000);
             return true;
         }
         return false;
@@ -114,4 +140,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Aktif port: ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`Server aktif: ${PORT}`));
