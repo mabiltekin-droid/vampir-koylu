@@ -1,161 +1,71 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
+const { Server } = require("socket.io");
+const path = require('path');
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-let players = [];
-let gameState = "waiting"; 
-let votes = {}; 
-let actions = { protectedId: null, vampireTarget: null };
-let timer = null;
-let totalTasksCompleted = 0;
+// Oyun Değişkenleri
+let players = {}; // {id: {x, y, username, role, isAlive}}
+let gameState = 'LOBBY'; // LOBBY, DAY, NIGHT, VOTING
+let votes = {}; // {voterId: votedId}
 
 io.on('connection', (socket) => {
+    console.log('Yeni oyuncu bağlandı:', socket.id);
+
+    // 1. Oyuncu Katılımı
     socket.on('joinGame', (username) => {
-        if (!players.find(p => p.id === socket.id)) {
-            players.push({ id: socket.id, name: username, role: null, alive: true, tasks: [], completedTasks: 0 });
+        players[socket.id] = {
+            id: socket.id,
+            x: Math.floor(Math.random() * 700) + 50,
+            y: Math.floor(Math.random() * 500) + 50,
+            username: username,
+            role: 'unknown',
+            isAlive: true
+        };
+        // Herkese yeni oyuncuyu bildir
+        io.emit('currentPlayers', players);
+    });
+
+    // 2. Hareket Senkronizasyonu
+    socket.on('playerMovement', (movementData) => {
+        if (players[socket.id] && players[socket.id].isAlive) {
+            players[socket.id].x = movementData.x;
+            players[socket.id].y = movementData.y;
+            // Diğerlerine bu oyuncunun hareketini bildir
+            socket.broadcast.emit('playerMoved', players[socket.id]);
         }
-        io.emit('updatePlayerList', players);
     });
 
-    // OYUNU SIFIRLAMA (Yönetici Tuşu için)
-    socket.on('adminResetGame', () => {
-        gameState = "waiting";
-        if (timer) clearInterval(timer);
-        players.forEach(p => {
-            p.role = null;
-            p.alive = true;
-            p.tasks = [];
-            p.completedTasks = 0;
-        });
-        votes = {};
-        actions = { protectedId: null, vampireTarget: null };
-        totalTasksCompleted = 0;
-        io.emit('reload'); // Herkesin ekranını temizle
-    });
-
+    // 3. Oyun Başlangıcı ve Rol Dağıtımı
     socket.on('startGame', () => {
-        if (players.length < 3) return;
-        gameState = "starting";
-        totalTasksCompleted = 0;
-        let pool = [...players];
-        pool.sort(() => Math.random() - 0.5);
-
-        players.forEach((p, idx) => {
-            p.alive = true;
-            p.tasks = ["Kuyudan su çek", "Kapıyı kilitle", "Parşömen oku"].sort(() => Math.random() - 0.5);
-            if (idx === 0) p.role = 'Vampir';
-            else if (idx === 1) p.role = 'Kahin';
-            else if (idx === 2) p.role = 'Doktor';
-            else p.role = 'Köylü';
-            io.to(p.id).emit('assignRole', { role: p.role, tasks: p.tasks });
-        });
-        startNight();
-    });
-
-    function startNight() {
-        gameState = "night";
-        votes = {}; // Oyları her gece temizle
-        actions = { protectedId: null, vampireTarget: null };
-        io.emit('gameUpdate', { state: "night", message: "🌙 Gece... Vampir kurbanını seçiyor.", players });
-    }
-
-    socket.on('nightAction', (data) => {
-        const p = players.find(p => p.id === socket.id);
-        if (!p || !p.alive || gameState !== "night") return;
-        if (p.role === 'Vampir') actions.vampireTarget = data.targetId;
-        if (p.role === 'Doktor') actions.protectedId = data.targetId;
-        if (p.role === 'Kahin') {
-            const t = players.find(t => t.id === data.targetId);
-            if (t) socket.emit('announcement', `🔮 Görü: ${t.name} bir ${t.role}!`);
+        const ids = Object.keys(players);
+        if (ids.length >= 3) { // Minimum 3 oyuncu
+            // Rastgele bir vampir seç
+            const vampireId = ids[Math.floor(Math.random() * ids.length)];
+            
+            ids.forEach(id => {
+                players[id].role = (id === vampireId) ? 'Vampire' : 'Villager';
+                // Rollere özel mesaj gönder (Sadece kendisine)
+                io.to(id).emit('yourRole', players[id].role);
+            });
+            
+            gameState = 'DAY';
+            io.emit('gameStateChanged', gameState);
         }
     });
 
-    socket.on('finishNight', () => {
-        if (gameState !== "night") return;
-        let news = "🏥 Gece sakin geçti, kimse ölmedi.";
-        if (actions.vampireTarget && actions.vampireTarget !== actions.protectedId) {
-            const victim = players.find(v => v.id === actions.vampireTarget);
-            if (victim) { victim.alive = false; news = `💀 ${victim.name} gece saldırıya uğradı!`; }
-        }
-        startDay(news);
-    });
-
-    function startDay(news) {
-        if (checkGameOver()) return;
-        gameState = "day";
-        votes = {}; // Önemli: Gündüz başında oyları sıfırla
-        io.emit('gameUpdate', { state: "day", message: news, players });
-        
-        let timeLeft = 30;
-        if (timer) clearInterval(timer);
-        timer = setInterval(() => {
-            timeLeft--;
-            io.emit('timerUpdate', timeLeft);
-            if (timeLeft <= 0) {
-                clearInterval(timer);
-                tallyVotes();
-            }
-        }, 1000);
-    }
-
-    socket.on('castVote', (targetId) => {
-        if (gameState !== "day") return;
-        votes[socket.id] = targetId;
-        const alivePlayers = players.filter(p => p.alive).length;
-        if (Object.keys(votes).length >= alivePlayers) {
-            clearInterval(timer);
-            tallyVotes();
-        }
-    });
-
-    function tallyVotes() {
-        if (gameState !== "day") return; // Çift tetiklenmeyi engelle
-        const counts = {};
-        Object.values(votes).forEach(id => counts[id] = (counts[id] || 0) + 1);
-        
-        const lynchedId = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b, null);
-        const victim = players.find(v => v.id === lynchedId);
-        
-        if (victim) {
-            victim.alive = false;
-            io.emit('announcement', `📢 Köylüler toplandı ve ${victim.name} kişisini astı!`);
-        } else {
-            io.emit('announcement', "📢 Kimse asılmadı.");
-        }
-
-        votes = {}; // Temizlik
-        if (!checkGameOver()) {
-            gameState = "transition"; // Donmayı engellemek için ara durum
-            setTimeout(startNight, 4000);
-        }
-    }
-
-    function checkGameOver() {
-        const v = players.filter(p => p.role === 'Vampir' && p.alive);
-        const c = players.filter(p => p.role !== 'Vampir' && p.alive);
-        let winner = v.length === 0 ? "KÖYLÜLER" : (v.length >= c.length ? "VAMPİRLER" : null);
-        if (winner) {
-            io.emit('gameOver', { winner });
-            gameState = "waiting";
-            return true;
-        }
-        return false;
-    }
-
-    socket.on('sendMessage', (data) => {
-        const p = players.find(p => p.id === socket.id);
-        if (p) io.emit('receiveMessage', { name: p.name, text: data.text });
-    });
-
+    // 4. Oyuncu Ayrılması
     socket.on('disconnect', () => {
-        players = players.filter(p => p.id !== socket.id);
-        io.emit('updatePlayerList', players);
+        console.log('Oyuncu ayrıldı:', socket.id);
+        delete players[socket.id];
+        io.emit('playerDisconnected', socket.id);
     });
 });
 
-server.listen(3000);
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Oyun sunucusu hazır: http://localhost:${PORT}`));
