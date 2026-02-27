@@ -1,24 +1,9 @@
 {
   "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "server.js",
-      "use": "@vercel/node"
-    }
-    // Eğer Phaser dosyaların `public` içindeyse ve derleme (build) gerektirmiyorsa bu yeterli.
-  ],
-  "routes": [
-    {
-      "src": "/(assets|js|style)/.*", // Görseller, scriptler vb. statik dosyalar için
-      "dest": "/public/$1"
-    },
-    {
-      "src": "/socket.io/.*", // Socket.io trafiğini Node sunucusuna yönlendir
-      "dest": "server.js"
-    },
-    {
-      "src": "/(.*)", // Geri kalan her şeyi Node sunucusuna yönlendir (Phaser index.html vb.)
-      "dest": "server.js"
+      "source": "/(.*)",
+      "destination": "/api/server.js"
     }
   ]
 }
